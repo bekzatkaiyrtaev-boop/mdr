@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>МДР</title>
+<link rel="stylesheet" href="style.css?v=2">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">МДР — <span id="projName">Сводный реестр проектной документации</span></div>
+  <div class="right">
+    <div id="langSwitch" style="display:flex;gap:2px;">
+      <button class="btn secondary small" id="btnLangRu" data-lang="ru">RU</button>
+      <button class="btn secondary small" id="btnLangEn" data-lang="en">EN</button>
+      <button class="btn secondary small" id="btnLangBoth" data-lang="both">RU+EN</button>
+    </div>
+    <span id="whoAmI"></span>
+    <button class="btn secondary small" id="btnLogout">Выйти</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="tabs" id="tabs"></div>
+  <div id="tabContent"></div>
+</div>
+
+<script src="app.js?v=22"></script>
+</body>
+</html>

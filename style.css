@@ -1,0 +1,211 @@
+:root{
+  --bg:       #0f1117;
+  --surface:  #1a1d27;
+  --surface2: #22263a;
+  --border:   #2e3347;
+  --accent:   #4f8ef7;
+  --green:    #7dd3a8;
+  --warn:     #f4b942;
+  --red:      #ef4444;
+  --text:     #d6daf0;
+  --muted:    #6b7099;
+  --mono:     'JetBrains Mono','Courier New',monospace;
+  --sans:     'Inter','Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;}
+body.hide-lang-en .lang-en{display:none !important;}
+body.hide-lang-ru .lang-ru{display:none !important;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.55;margin:0;}
+.wrap{max-width:1300px;margin:0 auto;padding:20px;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;}
+#mdrPrintable.card{overflow:visible;} /* иначе выпадающий список подсказок раздела обрезается краем карточки */
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);}
+.card-header .title{font-weight:600;font-size:14px;}
+.card-body{padding:16px;}
+
+.field{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.field label{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;}
+.field input[type=text],.field input[type=number],.field input[type=date],.field input[type=email],.field input[type=password],.field select,.field textarea{
+  background:var(--surface2);border:1px solid var(--border);color:var(--green);border-radius:6px;padding:8px 10px;font-family:var(--sans);font-size:13px;
+}
+.field textarea{resize:vertical;min-height:60px;}
+.field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
+
+/* базовые цвета для select/input вне .field (напр. в ячейках таблиц) —
+   без этого браузер подставляет системные (часто тёмные на тёмном) цвета */
+select{background:var(--surface2);border:1px solid var(--border);color:var(--green);border-radius:6px;padding:6px 8px;font-family:var(--sans);font-size:13px;}
+select:disabled{color:var(--muted);opacity:.7;}
+
+/* без color-scheme:dark иконка календаря и сам выпадающий календарь у type=date
+   рисуются в системной светлой теме — почти не видны на тёмном фоне сайта */
+input[type=date]{color-scheme:dark;}
+input[type=date]:not(:disabled){cursor:pointer;}
+
+/* строка фильтров под заголовком таблицы (см. "Поручения") — всегда видимая рамка,
+   в отличие от .text-like у самих данных, которые "плоские" до наведения */
+tr.filter-row td{padding:4px 8px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);}
+input.filter-input,select.filter-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:4px 6px;font-family:var(--sans);font-size:12px;}
+input.filter-input:focus,select.filter-input:focus{border-color:var(--accent);outline:none;}
+input.filter-input::placeholder{color:var(--muted);}
+
+button{font-family:var(--sans);cursor:pointer;}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:9px 16px;font-size:13px;font-weight:600;}
+.btn:hover{filter:brightness(1.1);}
+.btn.secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn.small{padding:5px 10px;font-size:12px;}
+
+.chip{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 6px 3px 10px;font-size:11px;font-family:var(--mono);margin:2px 4px 2px 0;}
+.chip .chip-x{cursor:pointer;color:var(--muted);font-weight:700;line-height:1;padding:0 3px;}
+.chip .chip-x:hover{color:var(--red);}
+
+input.text-like,textarea.text-like,select.text-like{background:transparent;border:1px solid transparent;border-radius:4px;padding:4px 6px;color:var(--green);transition:background .15s,border-color .15s;}
+textarea.text-like{font-family:inherit;font-size:inherit;resize:vertical;min-height:38px;}
+
+.assignee-row{display:flex;gap:4px;align-items:center;margin-bottom:4px;}
+.assignee-row select{flex:1;min-width:0;}
+input.text-like:hover,textarea.text-like:hover,select.text-like:hover{background:var(--surface2);border-color:var(--border);}
+input.text-like:focus,textarea.text-like:focus,select.text-like:focus{background:var(--surface2);border-color:var(--accent);outline:none;}
+tr.disc-row td{border-top:none;}
+
+.icon-btn{background:transparent;border:1px solid transparent;color:var(--muted);border-radius:4px;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;cursor:pointer;}
+.icon-btn:hover,.icon-btn:focus-visible{background:var(--surface2);color:var(--red);border-color:var(--border);outline:none;}
+.icon-btn.pinned{background:#1f2f4a;color:var(--accent);border-color:var(--accent);}
+.icon-btn.pinned:hover,.icon-btn.pinned:focus-visible{background:#1f2f4a;color:var(--accent);border-color:var(--accent);}
+
+.mdr-toggle{background:transparent;border:none;color:inherit;cursor:pointer;font-size:10px;padding:0 4px 0 0;}
+
+/* Таблица MDR оформлена как документ-реестр: белый фон, чёрный текст, сетка по всем
+   ячейкам (а не только горизонтальные линии, как в остальных таблицах сайта) */
+#mdrPrintable{background:#fff;}
+#mdrPrintable table{table-layout:fixed;}
+#mdrPrintable table th,#mdrPrintable table td{
+  border:1px solid #ccc;color:#000;background:#fff;
+  overflow-wrap:anywhere;word-break:break-word;
+}
+#mdrPrintable table thead th{position:sticky;top:0;background:#f3f3f3;color:#000;z-index:1;box-shadow:none;}
+#mdrPrintable table tr:hover td{background:#f5f5f5;}
+tr.mdr-vol-row td,tr.mdr-pos-row td,tr.mdr-disc-row td,tr.mdr-doc-row td{color:#000;background:#fff;}
+tr.mdr-vol-row td{font-weight:700;}
+tr.mdr-pos-row td{font-weight:700;}
+tr.mdr-disc-row td{font-weight:600;}
+/* строки листов — вдвое компактнее по высоте, чтобы визуально отличаться от "заголовочных"
+   строк томов/позиций/разделов (у тех — обычная высота, тут — плотный список документов).
+   У поля "номер тома/альбома" (input.text-like) своё внутреннее padding — его тоже нужно
+   уменьшить, иначе именно оно, а не td, будет диктовать реальную высоту строки */
+tr.mdr-doc-row td{padding-top:2px;padding-bottom:2px;font-size:12px;}
+tr.mdr-doc-row input.text-like,tr.mdr-doc-row select{padding-top:1px;padding-bottom:1px;}
+#mdrPrintable .icon-btn{color:#666;}
+#mdrPrintable .icon-btn:hover,#mdrPrintable .icon-btn:focus-visible{background:#eee;color:var(--red);border-color:#ccc;}
+#mdrPrintable .icon-btn.pinned{background:#e8f0fe;color:var(--accent);border-color:var(--accent);}
+#mdrPrintable .icon-btn.pinned:hover,#mdrPrintable .icon-btn.pinned:focus-visible{background:#e8f0fe;color:var(--accent);border-color:var(--accent);}
+#mdrPrintable input.text-like{color:#000;}
+#mdrPrintable input.text-like:hover,#mdrPrintable input.text-like:focus{background:#f0f0f0;border-color:#999;}
+#mdrPrintable input.text-like::placeholder{color:#999;}
+#mdrPrintable .muted{color:#777;}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+table th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;border-bottom:1px solid var(--border);}
+table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+table tr:hover td{background:var(--surface2);}
+table tr.row-click{cursor:pointer;}
+
+/* "Поручения" — сплошная сетка-таблица без скруглённых полей внутри (карточка и так
+   уже скруглена — скруглять ещё и каждое поле внутри неё лишнее, тяжело читается) */
+table.assignments-table th,table.assignments-table td{border-right:1px solid var(--border);}
+table.assignments-table th:last-child,table.assignments-table td:last-child{border-right:none;}
+table.assignments-table input.text-like,
+table.assignments-table textarea.text-like,
+table.assignments-table select,
+table.assignments-table input.filter-input,
+table.assignments-table select.filter-input{border-radius:0;}
+/* select/date не сжимались до ширины узкой колонки (свой минимум по контенту у native
+   controls) и вылезали за пределы ячейки — сбрасываем и обрезаем длинный текст многоточием */
+table.assignments-table select,
+table.assignments-table input.text-like{min-width:0;}
+table.assignments-table select{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* "Поручение"/"Основание"/"Примечание" — textarea целиком заполняет ячейку от края
+   до края (см. td padding:0 в разметке), поэтому у самого поля своей рамки нет —
+   рамка ячейки и есть его рамка */
+table.assignments-table textarea.asgText,
+table.assignments-table textarea.asgBasis,
+table.assignments-table textarea.asgNote{border:none;border-radius:0;}
+table.assignments-table textarea.asgText:hover,table.assignments-table textarea.asgText:focus,
+table.assignments-table textarea.asgBasis:hover,table.assignments-table textarea.asgBasis:focus,
+table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.asgNote:focus{border:none;}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge.not_started{background:#2e3347;color:var(--muted);}
+.badge.in_progress{background:#3a2f0f;color:var(--warn);}
+.badge.issued{background:#1f2f4a;color:var(--accent);}
+.badge.approved{background:#173a2c;color:var(--green);}
+.badge.construction{background:#3a1a1a;color:var(--red);}
+.badge.done{background:#173a2c;color:var(--green);}
+.badge.cancelled{background:#3a1a1a;color:var(--red);}
+
+.tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);}
+.tab{padding:10px 16px;color:var(--muted);border-bottom:2px solid transparent;font-weight:600;font-size:13px;}
+.tab.active{color:var(--accent);border-color:var(--accent);}
+.tab:hover{color:var(--text);}
+
+.subtabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border);}
+.subtab{padding:8px 14px;color:var(--muted);border-bottom:2px solid transparent;font-weight:600;font-size:12px;cursor:pointer;user-select:none;}
+.subtab.active{color:var(--accent);border-color:var(--accent);}
+.subtab:hover{color:var(--text);}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);}
+.topbar .brand{font-weight:700;font-size:15px;}
+.topbar .right{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:10px;max-width:640px;width:92%;max-height:85vh;overflow:auto;}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);}
+.modal-body{padding:18px;}
+
+.context-menu{position:fixed;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px;min-width:200px;}
+.context-menu-item{display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text);padding:8px 12px;font-size:13px;border-radius:5px;cursor:pointer;font-family:var(--sans);}
+.context-menu-item:hover{background:var(--surface2);color:var(--accent);}
+
+.tree-item{padding:4px 0 4px 0;}
+.muted{color:var(--muted);}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;}
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center;}
+.stat-card .num{font-size:24px;font-weight:700;color:var(--accent);}
+.stat-card .label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-top:4px;}
+
+.auth-box{max-width:360px;margin:80px auto;}
+.error-msg{color:var(--red);font-size:12px;margin-top:6px;}
+.hidden{display:none !important;}
+
+/* ===== Печать MDR — оформление как в Excel: чёрно-белая таблица с сеткой ===== */
+@media print{
+  body{background:#fff !important;color:#000 !important;}
+  .topbar,.tabs,#btnPrintMdr{display:none !important;}
+  .wrap{max-width:none !important;padding:0 !important;}
+
+  .card{background:#fff !important;border:1px solid #000 !important;color:#000 !important;box-shadow:none !important;}
+  .card-header{border-bottom:1px solid #000 !important;}
+
+  /* печатаем все строки, даже свёрнутые на экране */
+  tr.mdr-disc-row,tr.mdr-doc-row{display:table-row !important;}
+  .mdr-toggle{display:none !important;}
+
+  table{border-collapse:collapse !important;width:100% !important;}
+  table th,table td{
+    border:1px solid #000 !important;color:#000 !important;background:#fff !important;
+    padding:3px 6px !important;font-size:10px !important;position:static !important;box-shadow:none !important;
+  }
+  table th{background:#f3f3f3 !important;font-weight:700 !important;text-transform:none !important;}
+  table tr:hover td{background:#fff !important;}
+
+  tr.mdr-vol-row td{background:#b4a7d6 !important;font-weight:700 !important;}
+  tr.mdr-pos-row td{background:#d9d2e9 !important;font-weight:700 !important;}
+  tr.mdr-disc-row td{background:#ead1dc !important;font-weight:600 !important;}
+  tr.mdr-vol-row,tr.mdr-pos-row,tr.mdr-disc-row{break-inside:avoid;}
+  tr.mdr-vol-row input,tr.mdr-pos-row input,tr.mdr-disc-row input{color:#000 !important;}
+  #btnAddVolume{display:none !important;}
+
+  .badge{border:1px solid #000 !important;background:#fff !important;color:#000 !important;border-radius:3px !important;}
+  .muted{color:#333 !important;}
+}

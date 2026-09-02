@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>МДР — вход</title>
+<link rel="stylesheet" href="style.css?v=2">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+</head>
+<body>
+<div class="auth-box">
+  <div class="card">
+    <div class="card-header"><span class="title">МДР — вход</span></div>
+    <div class="card-body">
+      <div class="field-grid" style="grid-template-columns:1fr;gap:12px;">
+        <div class="field">
+          <label>Имя</label>
+          <input type="text" id="fullName" placeholder="Имя Фамилия">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="email" placeholder="you@company.com">
+        </div>
+        <div class="field">
+          <label>Пароль</label>
+          <input type="password" id="password" placeholder="••••••••">
+          <span class="muted" style="font-size:11px;">минимум 6 символов</span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" id="btnLogin" style="flex:1;">Войти</button>
+          <button class="btn secondary" id="btnSignup" style="flex:1;">Регистрация</button>
+        </div>
+        <div class="error-msg hidden" id="errMsg"></div>
+      </div>
+    </div>
+  </div>
+  <p class="muted" style="text-align:center;font-size:12px;">
+    Первый зарегистрированный пользователь автоматически получает роль «ГИП».
+    Все следующие — «Инженер» по умолчанию, роль меняется во вкладке
+    «Пользователи».
+  </p>
+</div>
+
+<script>
+const errMsg = document.getElementById('errMsg');
+function showError(msg){ errMsg.textContent = msg; errMsg.classList.remove('hidden'); }
+function clearError(){ errMsg.classList.add('hidden'); }
+
+if (typeof window.supabase === 'undefined'){
+  showError('Не удалось загрузить библиотеку Supabase (cdn.jsdelivr.net). Проверьте интернет-соединение, отключите блокировщик рекламы для этой страницы и обновите её.');
+  throw new Error('supabase-js CDN failed to load');
+}
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage }
+});
+
+const ERROR_TRANSLATIONS = [
+  [/invalid login credentials/i, 'Неверный email или пароль — либо аккаунт ещё не создан (нажмите «Регистрация»).'],
+  [/user already registered/i, 'Пользователь с таким email уже зарегистрирован — нажмите «Войти».'],
+  [/password should be at least/i, 'Пароль слишком короткий — минимум 6 символов.'],
+  [/unable to validate email address/i, 'Некорректный email — проверьте адрес.'],
+  [/email not confirmed/i, 'Email не подтверждён. Если в Supabase включено подтверждение почты — проверьте письмо, либо отключите Confirm email в Authentication → Settings (см. README).'],
+  [/failed to fetch/i, 'Нет связи с сервером — проверьте интернет-соединение и config.js (SUPABASE_URL/KEY).'],
+];
+function translateError(msg){
+  const hit = ERROR_TRANSLATIONS.find(([re]) => re.test(msg));
+  return hit ? hit[1] : msg;
+}
+
+function validateEmail(email){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+
+document.getElementById('btnLogin').addEventListener('click', async () => {
+  clearError();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  if (!email || !validateEmail(email)) return showError('Введите корректный email.');
+  if (!password) return showError('Введите пароль.');
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) return showError(translateError(error.message));
+  window.location.href = 'app.html';
+});
+
+document.getElementById('btnSignup').addEventListener('click', async () => {
+  clearError();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const full_name = document.getElementById('fullName').value.trim();
+  if (!full_name) return showError('Введите имя.');
+  if (!email || !validateEmail(email)) return showError('Введите корректный email.');
+  if (password.length < 6) return showError('Пароль должен быть не короче 6 символов.');
+  const { error } = await sb.auth.signUp({ email, password, options: { data: { full_name } } });
+  if (error) return showError(translateError(error.message));
+  window.location.href = 'app.html';
+});
+
+// если уже залогинен — сразу в приложение
+sb.auth.getSession().then(({ data }) => {
+  if (data.session) window.location.href = 'app.html';
+});
+</script>
+</body>
+</html>
