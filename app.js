@@ -1099,42 +1099,39 @@ function abbreviateName(name){
     .join('');
 }
 // альбомы позиции: каждая строка position_disciplines — отдельный альбом (напр. КЖ1, КЖ2),
-// но раздел (справочник с исполнителями, public.disciplines) у одноимённых альбомов ОДИН и тот же
+// но раздел (справочник с исполнителями, public.disciplines) у одноимённых альбомов ОДИН и тот же.
+// Порядок — как расставил пользователь стрелками (просто по sort_order, без принудительной
+// перегруппировки одинаковых кодов — та мешала свободно двигать строки мимо других групп)
 function disciplinesForPositionAll(positionId){
-  const list = positionDisciplines
+  return positionDisciplines
     .filter(pd => pd.position_id === positionId)
     .sort((a,b) => a.sort_order - b.sort_order)
     .map(pd => ({ pd, d: disciplines.find(x => x.code === pd.discipline_code) || null }));
-  // альбомы одного и того же раздела группируем рядом друг с другом (по коду раздела) —
-  // иначе итоговые номера в MDR могли бы отображаться не по возрастанию
-  const topIndexByCode = {};
-  let topCounter = 0;
-  list.forEach(({ pd }) => { if (!(pd.discipline_code in topIndexByCode)) topIndexByCode[pd.discipline_code] = ++topCounter; });
-  return [...list].sort((a, b) => topIndexByCode[a.pd.discipline_code] - topIndexByCode[b.pd.discipline_code]);
 }
-// порядковый номер раздела в позиции = "номер позиции.номер группы раздела" (напр. 1.2),
-// а если под одним и тем же разделом в позиции несколько альбомов (напр. КЖ1, КЖ2 — общий
-// discipline_code) — добавляется ещё одна цифра, номер альбома внутри группы (1.2.1, 1.2.2)
+// порядковый номер раздела в позиции = "номер позиции.номер группы" (напр. 1.2); группа —
+// это подряд идущие альбомы одного раздела (напр. КЖ1, КЖ2) — тогда добавляется ещё одна
+// цифра, номер альбома внутри группы (1.2.1, 1.2.2). Если одинаковый код встречается не
+// подряд (пользователь развёл их по разным местам списка) — это уже разные группы/номера
 function sectionOrderNumbers(positionId){
   const p = positions.find(x => x.id === positionId);
   const posCode = (p && p.position_code) ? String(p.position_code).trim() : '';
   const list = positionDisciplines
     .filter(pd => pd.position_id === positionId)
     .sort((a,b) => a.sort_order - b.sort_order);
-  const topIndexByCode = {};
-  let topCounter = 0;
-  list.forEach(pd => { if (!(pd.discipline_code in topIndexByCode)) topIndexByCode[pd.discipline_code] = ++topCounter; });
-  const countByCode = {};
-  list.forEach(pd => { countByCode[pd.discipline_code] = (countByCode[pd.discipline_code]||0) + 1; });
-  const seenByCode = {};
   const result = {};
-  [...list]
-    .sort((a,b) => topIndexByCode[a.discipline_code] - topIndexByCode[b.discipline_code])
-    .forEach(pd => {
-      seenByCode[pd.discipline_code] = (seenByCode[pd.discipline_code]||0) + 1;
-      const sub = countByCode[pd.discipline_code] > 1 ? `.${seenByCode[pd.discipline_code]}` : '';
-      result[pd.id] = `${posCode ? posCode+'.' : ''}${topIndexByCode[pd.discipline_code]}${sub}`;
-    });
+  let topCounter = 0;
+  let i = 0;
+  while (i < list.length){
+    let j = i;
+    while (j < list.length && list[j].discipline_code === list[i].discipline_code) j++;
+    topCounter++;
+    const runLen = j - i;
+    for (let k = i; k < j; k++){
+      const sub = runLen > 1 ? `.${k - i + 1}` : '';
+      result[list[k].id] = `${posCode ? posCode+'.' : ''}${topCounter}${sub}`;
+    }
+    i = j;
+  }
   return result;
 }
 // шифр альбома по умолчанию = аббревиатура названия раздела + порядковый номер среди
@@ -1167,39 +1164,36 @@ function computeDesignationVolume(marker){
   return [contract, '00', marker].filter(Boolean).join('-');
 }
 // альбомы, стоящие прямо в томе (без позиции) — см. "Позиции по ГП" → "Отдельные тома".
-// Логика группировки идентична disciplinesForPositionAll, только ключ владельца — volume_id
+// Порядок — просто по sort_order, как расставил пользователь (см. комментарий у
+// disciplinesForPositionAll про отказ от принудительной перегруппировки одинаковых кодов)
 function disciplinesForVolumeAll(volumeId){
-  const list = positionDisciplines
+  return positionDisciplines
     .filter(pd => pd.volume_id === volumeId)
     .sort((a,b) => a.sort_order - b.sort_order)
     .map(pd => ({ pd, d: disciplines.find(x => x.code === pd.discipline_code) || null }));
-  const topIndexByCode = {};
-  let topCounter = 0;
-  list.forEach(({ pd }) => { if (!(pd.discipline_code in topIndexByCode)) topIndexByCode[pd.discipline_code] = ++topCounter; });
-  return [...list].sort((a, b) => topIndexByCode[a.pd.discipline_code] - topIndexByCode[b.pd.discipline_code]);
 }
-// № п.п. раздела в отдельном томе = "номер тома.номер группы раздела" — та же логика,
-// что sectionOrderNumbers, только префикс — номер тома, а не "Позиция по ГП"
+// № п.п. раздела в отдельном томе — та же логика, что sectionOrderNumbers (группа = подряд
+// идущие альбомы одного раздела), только префикс — номер тома, а не "Позиция по ГП"
 function sectionOrderNumbersForVolume(volumeId){
   const v = volumes.find(x => x.id === volumeId);
   const volCode = (v && v.number) ? String(v.number).trim() : '';
   const list = positionDisciplines
     .filter(pd => pd.volume_id === volumeId)
     .sort((a,b) => a.sort_order - b.sort_order);
-  const topIndexByCode = {};
-  let topCounter = 0;
-  list.forEach(pd => { if (!(pd.discipline_code in topIndexByCode)) topIndexByCode[pd.discipline_code] = ++topCounter; });
-  const countByCode = {};
-  list.forEach(pd => { countByCode[pd.discipline_code] = (countByCode[pd.discipline_code]||0) + 1; });
-  const seenByCode = {};
   const result = {};
-  [...list]
-    .sort((a,b) => topIndexByCode[a.discipline_code] - topIndexByCode[b.discipline_code])
-    .forEach(pd => {
-      seenByCode[pd.discipline_code] = (seenByCode[pd.discipline_code]||0) + 1;
-      const sub = countByCode[pd.discipline_code] > 1 ? `.${seenByCode[pd.discipline_code]}` : '';
-      result[pd.id] = `${volCode ? volCode+'.' : ''}${topIndexByCode[pd.discipline_code]}${sub}`;
-    });
+  let topCounter = 0;
+  let i = 0;
+  while (i < list.length){
+    let j = i;
+    while (j < list.length && list[j].discipline_code === list[i].discipline_code) j++;
+    topCounter++;
+    const runLen = j - i;
+    for (let k = i; k < j; k++){
+      const sub = runLen > 1 ? `.${k - i + 1}` : '';
+      result[list[k].id] = `${volCode ? volCode+'.' : ''}${topCounter}${sub}`;
+    }
+    i = j;
+  }
   return result;
 }
 // шифр альбома по умолчанию для альбома в отдельном томе — аналог defaultMarkerForAlbum
