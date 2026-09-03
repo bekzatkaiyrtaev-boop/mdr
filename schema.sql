@@ -46,13 +46,18 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- хелперы для RLS-политик (security definer — обходят RLS profiles, чтобы не было рекурсии)
+-- хелперы для RLS-политик (security definer — обходят RLS profiles, чтобы не было рекурсии).
+-- bekzat.kaiyrtaev@gmail.com — жёстко закреплённый администратор: всегда 'gip', независимо
+-- от того, что записано в profiles.role (см. также protect_profile_privileges ниже)
 create or replace function public.current_user_role()
 returns text
 language sql security definer stable
 set search_path = public
 as $$
-  select role from public.profiles where id = auth.uid();
+  select case
+    when (select email from auth.users u where u.id = auth.uid()) = 'bekzat.kaiyrtaev@gmail.com' then 'gip'
+    else (select role from public.profiles where id = auth.uid())
+  end;
 $$;
 
 -- есть ли у текущего пользователя доступ к разделу (по совпадению email с одним
@@ -74,7 +79,8 @@ as $$
   );
 $$;
 
--- защита от самоповышения роли — менять может только ГИП/помощник ГИПа
+-- защита от самоповышения роли — менять может только ГИП/помощник ГИПа;
+-- у закреплённого администратора роль дополнительно принудительно всегда 'gip'
 create or replace function public.protect_profile_privileges()
 returns trigger
 language plpgsql security definer
@@ -83,6 +89,9 @@ as $$
 begin
   if public.current_user_role() not in ('gip','gip_assistant') then
     new.role := old.role;
+  end if;
+  if (select email from auth.users where id = new.id) = 'bekzat.kaiyrtaev@gmail.com' then
+    new.role := 'gip';
   end if;
   return new;
 end;

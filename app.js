@@ -31,8 +31,12 @@ const ASSIGNMENT_STATUS_LABELS = {
   cancelled:   { ru:'Отменено',   en:'Cancelled' },
 };
 const ROLE_LABELS = { gip:'ГИП', gip_assistant:'Помощник ГИПа', engineer:'Инженер' };
+// закреплённый администратор — всегда полные права, роль нельзя сменить никому (см. также
+// current_user_role()/protect_profile_privileges в схеме БД — там та же проверка на бэкенде)
+const ADMIN_EMAIL = 'bekzat.kaiyrtaev@gmail.com';
+function isAdminEmail(email){ return (email||'').trim().toLowerCase() === ADMIN_EMAIL; }
 // ГИП и помощник ГИПа — полный доступ (наравне с ГИП, кроме явных ограничений в RLS)
-function isFullAccess(){ return profile.role === 'gip' || profile.role === 'gip_assistant'; }
+function isFullAccess(){ return profile.role === 'gip' || profile.role === 'gip_assistant' || isAdminEmail(profile.email); }
 const DEFAULT_VOLUMES = [
   { number:'1', name_ru:'ПАСПОРТ ПРОЕКТА', name_en:'DETAIL DESIGN PASSPORT', is_positions_root:false },
   { number:'2', name_ru:'ЭНЕРГЕТИЧЕСКИЙ ПАСПОРТ ОБЪЕКТА', name_en:'ENERGY PASSPORT OF THE FACILITY', is_positions_root:false },
@@ -237,12 +241,15 @@ function disciplineNameOptionsHtml(){
 }
 // надёжный способ привязать альбом к уже существующему разделу — напрямую по коду, а не
 // через сопоставление введённого текста с названием (то, что ниже, в .mAlbumNameRu, могло
-// создать дубль с новым автосгенерированным кодом, если название набрано не один-в-один)
+// создать дубль с новым автосгенерированным кодом, если название набрано не один-в-один).
+// Показывается только для ещё не привязанных альбомов — если раздел уже выбран, его название
+// и так видно в поле ниже, повторно показывать "код — название" в селекте не нужно
 function disciplineSelectHtml(pd){
   const matched = disciplines.find(x => x.code === pd.discipline_code);
+  if (matched) return '';
   return `<select class="text-like mAlbumDisciplineSelect" data-pdid="${pd.id}" style="width:100%;margin-bottom:4px;">
     <option value="">— выбрать раздел из списка —</option>
-    ${sortedDisciplines().map(d => `<option value="${esc(d.code)}" ${matched && matched.code===d.code ? 'selected':''}>${esc(d.code||'?')} — ${esc(d.name_ru||'(без названия)')}</option>`).join('')}
+    ${sortedDisciplines().map(d => `<option value="${esc(d.code)}">${esc(d.code||'?')} — ${esc(d.name_ru||'(без названия)')}</option>`).join('')}
   </select>`;
 }
 
@@ -1137,12 +1144,14 @@ function defaultMarkerForAlbum(positionId, albumId){
   const pdSelf = positionDisciplines.find(x => x.id === albumId);
   if (!pdSelf) return '';
   const d = disciplines.find(x => x.code === pdSelf.discipline_code);
-  if (!d || !d.name_ru) return '';
+  if (!d) return '';
   const sameCode = positionDisciplines
     .filter(pd => pd.position_id === positionId && pd.discipline_code === pdSelf.discipline_code)
     .sort((a,b) => a.sort_order - b.sort_order);
   const idx = sameCode.findIndex(x => x.id === albumId) + 1;
-  return abbreviateName(d.name_ru) + (idx || 1);
+  // шифр строится от кода раздела (задаётся в "Проекте"), а не от аббревиатуры названия —
+  // иначе шифр мог не совпадать с кодом, если аббревиатура названия отличается от кода
+  return (d.code || abbreviateName(d.name_ru)) + (idx || 1);
 }
 // обозначение листа = Номер договора-Номер по ГП(или 00, если без позиции)-Шифр альбома
 function computeDesignation(positionId, marker){
@@ -1198,12 +1207,13 @@ function defaultMarkerForVolumeAlbum(volumeId, albumId){
   const pdSelf = positionDisciplines.find(x => x.id === albumId);
   if (!pdSelf) return '';
   const d = disciplines.find(x => x.code === pdSelf.discipline_code);
-  if (!d || !d.name_ru) return '';
+  if (!d) return '';
   const sameCode = positionDisciplines
     .filter(pd => pd.volume_id === volumeId && pd.discipline_code === pdSelf.discipline_code)
     .sort((a,b) => a.sort_order - b.sort_order);
   const idx = sameCode.findIndex(x => x.id === albumId) + 1;
-  return abbreviateName(d.name_ru) + (idx || 1);
+  // шифр строится от кода раздела (задаётся в "Проекте"), а не от аббревиатуры названия
+  return (d.code || abbreviateName(d.name_ru)) + (idx || 1);
 }
 // тома, в которые НЕ вкладываются позиции по ГП — кандидаты для "Отдельных томов"
 // (см. "Позиции по ГП"); обычно это 4 из 5 стандартных томов, кроме "Основные комплекты..."
@@ -1324,7 +1334,7 @@ function discSheetRowsHtml(discs, owner){
         <td></td>
         <td colspan="2" style="padding-left:80px;">${esc(t(s.name_ru, s.name_en) || '—')}</td>
         <td>${esc(s.comment||'')}</td>
-        <td title="Ответственный задаётся во вкладке «Создание разделов»">${esc(responsibleName)}</td>
+        <td></td>
         <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.revision||'')}</td>
         <td>${mdrEditionSelectHtml(s)}</td>
       </tr>`);
@@ -1393,14 +1403,14 @@ function renderMdrTab(){
       </colgroup>
       <thead>
         <tr>
-          <th>Номер тома / номер альбома</th>
-          <th id="mdrLevelHeader" style="cursor:pointer;user-select:none;" title="Клик — переключить уровень детализации">№ по ГП</th>
-          <th>Наименование документа</th>
-          <th>Обозначение / Notation</th>
-          <th>Примечание</th>
-          <th title="Задаётся во вкладке «Создание разделов»">Ответственный исполнитель</th>
-          <th title="Задаётся во вкладке «Состав разделов»">Ревизия</th>
-          <th>Редакция</th>
+          <th><span class="lang-ru">Номер тома</span><span class="lang-en">Volume No.</span></th>
+          <th id="mdrLevelHeader" style="cursor:pointer;user-select:none;" title="Клик — переключить уровень детализации"><span class="lang-ru">№ по ГП</span><span class="lang-en">Position No.</span></th>
+          <th><span class="lang-ru">Наименование документа</span><span class="lang-en">Document Name</span></th>
+          <th><span class="lang-ru">Обозначение</span><span class="lang-en">Notation</span></th>
+          <th><span class="lang-ru">Примечание</span><span class="lang-en">Remarks</span></th>
+          <th title="Задаётся во вкладке «Создание разделов»"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
+          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-en">Revision</span></th>
+          <th><span class="lang-ru">Редакция</span><span class="lang-en">Edition</span></th>
         </tr>
       </thead>
       <tbody>
@@ -1661,18 +1671,21 @@ function renderUsersTab(){
         ${list.map(e => {
           const registered = allProfiles.some(p => (p.email||'').toLowerCase() === (e.email||'').toLowerCase());
           const empCodes = [...(codes[e.id] || [])];
+          const isAdmin = isAdminEmail(e.email);
           return `
           <tr data-id="${e.id}">
             <td><input type="text" class="text-like eName" data-id="${e.id}" value="${esc(e.full_name||'')}" placeholder="ФИО" style="width:100%;"></td>
             <td><input type="email" class="text-like eEmail" data-id="${e.id}" value="${esc(e.email||'')}" placeholder="email" style="width:100%;"></td>
             <td class="muted" style="font-size:12px;">${empCodes.length ? esc(empCodes.join(', ')) : ''}</td>
             <td>
-              <select class="eRole" data-id="${e.id}">
-                ${Object.entries(ROLE_LABELS).map(([k,v]) => `<option value="${k}" ${e.role===k?'selected':''}>${v}</option>`).join('')}
-              </select>
+              ${isAdmin
+                ? `<span style="color:var(--accent);font-weight:700;" title="Закреплённый администратор — роль нельзя изменить">Администратор</span>`
+                : `<select class="eRole" data-id="${e.id}">
+                    ${Object.entries(ROLE_LABELS).map(([k,v]) => `<option value="${k}" ${e.role===k?'selected':''}>${v}</option>`).join('')}
+                  </select>`}
               ${!registered ? `<div class="muted" style="font-size:11px;margin-top:2px;">ещё не зарегистрирован</div>` : ''}
             </td>
-            <td><button class="icon-btn btn-del-employee" data-id="${e.id}" title="Удалить сотрудника">✕</button></td>
+            <td>${isAdmin ? '' : `<button class="icon-btn btn-del-employee" data-id="${e.id}" title="Удалить сотрудника">✕</button>`}</td>
           </tr>`;
         }).join('') || `<tr><td colspan="5" class="muted">Сотрудники пока не добавлены — нажмите «+ Добавить сотрудника»</td></tr>`}
       </table>
