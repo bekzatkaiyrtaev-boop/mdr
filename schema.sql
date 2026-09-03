@@ -155,7 +155,8 @@ create table public.disciplines (
   name_en text,
   note text,                   -- примечание к разделу
   created_by uuid references public.profiles(id),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint disciplines_project_code_unique unique (project_id, code)
 );
 
 alter table public.disciplines enable row level security;

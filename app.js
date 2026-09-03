@@ -1726,11 +1726,19 @@ function bindTabEvents(id){
     document.querySelectorAll('.dVolume, .dCode, .dNameRu, .dNameEn').forEach(el => el.addEventListener('change', async () => {
       const id = el.dataset.id;
       const volume_number = document.querySelector(`.dVolume[data-id="${id}"]`).value.trim();
-      const code = document.querySelector(`.dCode[data-id="${id}"]`).value.trim() || null;
+      const codeInput = document.querySelector(`.dCode[data-id="${id}"]`);
+      const code = codeInput.value.trim() || null;
       const name_ru = document.querySelector(`.dNameRu[data-id="${id}"]`).value.trim();
       const name_en = document.querySelector(`.dNameEn[data-id="${id}"]`).value.trim();
       const d = disciplines.find(x => x.id === id);
       const oldCode = d ? d.code : null;
+      // запрет на два раздела с одним кодом — иначе альбомы старого кода молча "переезжают"
+      // на чужой раздел при сохранении (см. каскад ниже) и разделы визуально путаются местами
+      if (code && disciplines.some(x => x.id !== id && (x.code||'').trim().toLowerCase() === code.toLowerCase())){
+        alert(`Код «${code}» уже используется другим разделом — коды должны быть уникальны. Выберите другой код.`);
+        codeInput.value = oldCode || '';
+        return;
+      }
       await dbWrite(sb.from('disciplines').update({
         volume_number: volume_number || null, code, name_ru: name_ru || null, name_en
       }).eq('id', id));
