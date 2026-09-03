@@ -239,23 +239,6 @@ function disciplineNameOptionsHtml(){
   const extras = DISCIPLINE_NAME_SUGGESTIONS.filter(n => !existingLower.has(n.toLowerCase()));
   return [...existing, ...extras].map(n => `<option value="${esc(n)}">`).join('');
 }
-// надёжный способ привязать альбом к разделу — напрямую по коду, а не через сопоставление
-// введённого текста с названием (см. .mAlbumNameRu ниже — то поле теперь у уже привязанных
-// альбомов просто переименовывает раздел "на месте" и НЕ переключает на другой раздел; чтобы
-// сменить привязку — нужно выбрать другой раздел именно здесь, в этом списке)
-function disciplineSelectHtml(pd){
-  const matched = disciplines.find(x => x.code === pd.discipline_code);
-  return `<select class="text-like mAlbumDisciplineSelect" data-pdid="${pd.id}" style="width:100%;margin-bottom:4px;">
-    <option value="">— выбрать раздел из списка —</option>
-    ${sortedDisciplines().map(d => {
-      const isSelected = matched && matched.code === d.code;
-      // у уже выбранного раздела в закрытом select — только код (+ подсказка), без повтора
-      // названия (оно и так видно в поле ниже); полное "код — название" — только в списке
-      const label = isSelected ? `${esc(d.code||'?')} — сменить раздел` : `${esc(d.code||'?')} — ${esc(d.name_ru||'(без названия)')}`;
-      return `<option value="${esc(d.code)}" ${isSelected?'selected':''}>${label}</option>`;
-    }).join('')}
-  </select>`;
-}
 
 // сортировка строк "Разделы и исполнители" по № п.п.
 // (напр. "1" < "1.1" < "1.2" < "2" < "3" — сравнение по числовым сегментам, не по алфавиту;
@@ -459,8 +442,7 @@ function renderStandaloneVolumeDetail(){
           <tr class="sec-disc-row-vol" data-pdid="${pd.id}" data-vol="${v.id}">
             <td style="font-family:var(--mono);font-weight:600;color:#fff;" title="Считается автоматически: номер тома.порядковый номер раздела">${esc(orderNumbers[pd.id] || '')}</td>
             <td>
-              ${disciplineSelectHtml(pd)}
-              <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="или введите название нового раздела" style="display:block;width:100%;">
+              <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="раздел не выбран — введите или выберите" title="Введите точное название раздела из списка, чтобы привязать к нему, или совсем новое — чтобы создать новый" style="display:block;width:100%;">
               <input type="text" class="text-like mAlbumNameEn lang-en" data-pdid="${pd.id}" value="${esc(d ? (d.name_en||'') : '')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;color:var(--muted);">
             </td>
             <td><input type="text" class="text-like mAlbumMarker" data-pdid="${pd.id}" value="${esc(pd.marker || defaultMarkerForVolumeAlbum(v.id, pd.id))}" placeholder="шифр" style="width:100%;font-weight:600;"></td>
@@ -604,8 +586,7 @@ function renderSectionsDetail(){
           <tr class="sec-disc-row" data-pdid="${pd.id}" data-pos="${p.id}">
             <td style="font-family:var(--mono);font-weight:600;color:#fff;" title="Считается автоматически: номер позиции.порядковый номер раздела">${esc(orderNumbers[pd.id] || '')}</td>
             <td>
-              ${disciplineSelectHtml(pd)}
-              <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="или введите название нового раздела" style="display:block;width:100%;">
+              <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="раздел не выбран — введите или выберите" title="Введите точное название раздела из списка, чтобы привязать к нему, или совсем новое — чтобы создать новый" style="display:block;width:100%;">
               <input type="text" class="text-like mAlbumNameEn lang-en" data-pdid="${pd.id}" value="${esc(d ? (d.name_en||'') : '')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;color:var(--muted);">
             </td>
             <td><input type="text" class="text-like mAlbumMarker" data-pdid="${pd.id}" value="${esc(pd.marker || defaultMarkerForAlbum(p.id, pd.id))}" placeholder="шифр" style="width:100%;font-weight:600;"></td>
@@ -627,32 +608,28 @@ function renderSectionsDetail(){
 // "Создание разделов" и MDR, т.к. обе рисуют строки с одинаковыми классами .mAlbumNameRu/.mAlbumNameEn/
 // .mAlbumMarker/.mAlbumNote/.btn-move-disc/.btn-del-mdr-disc
 function bindAlbumEditEvents(){
-  document.querySelectorAll('.mAlbumDisciplineSelect').forEach(el => el.addEventListener('change', async () => {
-    const pdid = el.dataset.pdid;
-    const code = el.value;
-    if (!code) return;
-    await dbWrite(sb.from('position_disciplines').update({ discipline_code: code }).eq('id', pdid));
-    const pdLink = positionDisciplines.find(x => x.id === pdid);
-    if (pdLink) pdLink.discipline_code = code;
-    renderTab(activeTab);
-  }));
-
   document.querySelectorAll('.mAlbumNameRu, .mAlbumNameEn').forEach(el => el.addEventListener('change', async () => {
     const pdid = el.dataset.pdid;
     const pdLink = positionDisciplines.find(x => x.id === pdid);
     if (!pdLink) return;
     const name_ru = document.querySelector(`.mAlbumNameRu[data-pdid="${pdid}"]`).value.trim();
     const name_en = document.querySelector(`.mAlbumNameEn[data-pdid="${pdid}"]`).value.trim();
-    const currentD = disciplines.find(x => x.code === pdLink.discipline_code) || null;
+    if (!name_ru) return; // пустое название — ничего не создаём и не отвязываем
 
-    if (currentD){
-      // раздел уже привязан — просто переименовываем его (это затронет и другие
-      // альбомы этого же раздела, у них общее название, так и задумано)
-      await dbWrite(sb.from('disciplines').update({ name_ru: name_ru || null, name_en: name_en || null }).eq('id', currentD.id));
-      currentD.name_ru = name_ru || null; currentD.name_en = name_en || null;
-    } else if (name_ru){
-      // альбом ещё ни к какому разделу не привязан — ищем существующий раздел с таким названием,
-      // чтобы не плодить дубли с отдельными исполнителями; если не нашли — создаём новый раздел
+    const currentD = disciplines.find(x => x.code === pdLink.discipline_code) || null;
+    const unchanged = currentD && (currentD.name_ru||'').trim().toLowerCase() === name_ru.toLowerCase();
+
+    if (unchanged){
+      // название не поменялось (просто донабрали EN или потеряли/вернули фокус) — раздел тот же
+      if (name_en && !currentD.name_en){
+        await dbWrite(sb.from('disciplines').update({ name_en }).eq('id', currentD.id));
+        currentD.name_en = name_en;
+      }
+    } else {
+      // название стёрли и вписали другое — переключаемся на раздел с таким названием (ищем
+      // среди ВСЕХ разделов, не только непривязанных); если такого нет — создаём новый и
+      // переключаемся на него. Переименовать раздел "на месте" тут больше нельзя — для этого
+      // есть вкладка "Проект", где это однозначно и не путается со сменой раздела
       let match = disciplines.find(x => (x.name_ru||'').trim().toLowerCase() === name_ru.toLowerCase());
       if (!match){
         let code = abbreviateName(name_ru) || 'РЗ';
@@ -1248,11 +1225,27 @@ async function insertAlbumAdjacentVolume(volumeId, targetPdId, dir){
   positionDisciplines = data || [];
   renderTab(activeTab);
 }
-let mdrDetailLevel = 4; // 1=только тома, 2=+позиции, 3=+разделы, 4=+листы
-function applyMdrDetailLevel(){
-  document.querySelectorAll('tr.mdr-pos-row').forEach(tr => tr.style.display = mdrDetailLevel >= 2 ? '' : 'none');
-  document.querySelectorAll('tr.mdr-disc-row').forEach(tr => tr.style.display = mdrDetailLevel >= 3 ? '' : 'none');
-  document.querySelectorAll('tr.mdr-doc-row').forEach(tr => tr.style.display = mdrDetailLevel >= 4 ? '' : 'none');
+// два независимых фильтра строк MDR (клик по заголовкам "Номер тома" / "№ по ГП"),
+// плюс ручные ▼/▶ на отдельных строках — те продолжают работать независимо от фильтров
+let mdrVolumesOnly = false;      // "Номер тома" — показывать только строки томов
+let mdrFilterPositionId = '';    // "№ по ГП" — показывать только эту позицию (+ её разделы/листы)
+function resetMdrRowToggles(){
+  document.querySelectorAll('.mdr-toggle').forEach(b => b.textContent = '▼');
+}
+function applyMdrRowFilters(){
+  if (mdrVolumesOnly){
+    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => tr.style.display = '');
+    document.querySelectorAll('tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = 'none');
+    return;
+  }
+  if (mdrFilterPositionId){
+    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => tr.style.display = 'none');
+    document.querySelectorAll('tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => {
+      tr.style.display = tr.dataset.pos === mdrFilterPositionId ? '' : 'none';
+    });
+    return;
+  }
+  document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = '');
 }
 // "Редакция" листа — своё отдельное поле (sheets.edition), задаётся прямо в MDR; выпадающий
 // список стандартных обозначений. Не путать с "Ревизией" (sheets.revision) — та берётся
@@ -1457,8 +1450,8 @@ function renderMdrTab(){
       </colgroup>
       <thead>
         <tr>
-          <th><span class="lang-ru">Номер тома</span><span class="lang-en">Volume No.</span></th>
-          <th id="mdrLevelHeader" style="cursor:pointer;user-select:none;" title="Клик — переключить уровень детализации"><span class="lang-ru">№ по ГП</span><span class="lang-en">Position No.</span></th>
+          <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — показать только тома, повторный клик — вернуть все строки"><span class="lang-ru">Номер тома</span><span class="lang-en">Volume No.</span></th>
+          <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию и показать только её, повторный клик — вернуть все строки"><span class="lang-ru">№ по ГП</span><span class="lang-en">Position No.</span></th>
           <th><span class="lang-ru">Наименование документа</span><span class="lang-en">Document Name</span></th>
           <th><span class="lang-ru">Обозначение</span><span class="lang-en">Notation</span></th>
           <th><span class="lang-ru">Примечание</span><span class="lang-en">Remarks</span></th>
@@ -2016,13 +2009,37 @@ function bindTabEvents(id){
         .forEach(tr => tr.style.display = collapsed ? 'none' : '');
     }));
 
-    document.getElementById('mdrLevelHeader').addEventListener('click', () => {
-      mdrDetailLevel = mdrDetailLevel >= 4 ? 1 : mdrDetailLevel + 1;
-      document.querySelectorAll('.mdr-toggle').forEach(b => b.textContent = '▼'); // сбрасываем ручные сворачивания строк
-      applyMdrDetailLevel();
+    document.getElementById('mdrVolHeader').addEventListener('click', () => {
+      mdrVolumesOnly = !mdrVolumesOnly;
+      if (mdrVolumesOnly) mdrFilterPositionId = ''; // фильтры взаимоисключающие
+      resetMdrRowToggles();
+      applyMdrRowFilters();
     });
 
-    applyMdrDetailLevel();
+    document.getElementById('mdrPosHeader').addEventListener('click', (e) => {
+      e.stopPropagation(); // иначе этот же клик долетает до document и document→hideContextMenu
+      // тут же закрывает список, который мы открываем ниже
+      if (mdrFilterPositionId){
+        // уже показываем одну позицию — повторный клик по заголовку возвращает все строки
+        mdrFilterPositionId = '';
+        resetMdrRowToggles();
+        applyMdrRowFilters();
+        return;
+      }
+      const list = sortedPositions();
+      if (!list.length) return alert('Позиции ещё не добавлены — см. вкладку «Позиции по ГП».');
+      showContextMenu(e.clientX, e.clientY, list.map(p => ({
+        label: positionLabel(p),
+        onClick: () => {
+          mdrVolumesOnly = false;
+          mdrFilterPositionId = p.id;
+          resetMdrRowToggles();
+          applyMdrRowFilters();
+        },
+      })));
+    });
+
+    applyMdrRowFilters();
   }
   else if (id === 'assignments'){
     // фильтры по столбцам — доступны всем, не только ГИП/помощнику
