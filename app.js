@@ -239,17 +239,21 @@ function disciplineNameOptionsHtml(){
   const extras = DISCIPLINE_NAME_SUGGESTIONS.filter(n => !existingLower.has(n.toLowerCase()));
   return [...existing, ...extras].map(n => `<option value="${esc(n)}">`).join('');
 }
-// надёжный способ привязать альбом к уже существующему разделу — напрямую по коду, а не
-// через сопоставление введённого текста с названием (то, что ниже, в .mAlbumNameRu, могло
-// создать дубль с новым автосгенерированным кодом, если название набрано не один-в-один).
-// Показывается только для ещё не привязанных альбомов — если раздел уже выбран, его название
-// и так видно в поле ниже, повторно показывать "код — название" в селекте не нужно
+// надёжный способ привязать альбом к разделу — напрямую по коду, а не через сопоставление
+// введённого текста с названием (см. .mAlbumNameRu ниже — то поле теперь у уже привязанных
+// альбомов просто переименовывает раздел "на месте" и НЕ переключает на другой раздел; чтобы
+// сменить привязку — нужно выбрать другой раздел именно здесь, в этом списке)
 function disciplineSelectHtml(pd){
   const matched = disciplines.find(x => x.code === pd.discipline_code);
-  if (matched) return '';
   return `<select class="text-like mAlbumDisciplineSelect" data-pdid="${pd.id}" style="width:100%;margin-bottom:4px;">
     <option value="">— выбрать раздел из списка —</option>
-    ${sortedDisciplines().map(d => `<option value="${esc(d.code)}">${esc(d.code||'?')} — ${esc(d.name_ru||'(без названия)')}</option>`).join('')}
+    ${sortedDisciplines().map(d => {
+      const isSelected = matched && matched.code === d.code;
+      // у уже выбранного раздела в закрытом select — только код (+ подсказка), без повтора
+      // названия (оно и так видно в поле ниже); полное "код — название" — только в списке
+      const label = isSelected ? `${esc(d.code||'?')} — сменить раздел` : `${esc(d.code||'?')} — ${esc(d.name_ru||'(без названия)')}`;
+      return `<option value="${esc(d.code)}" ${isSelected?'selected':''}>${label}</option>`;
+    }).join('')}
   </select>`;
 }
 
@@ -1108,30 +1112,14 @@ function disciplinesForPositionAll(positionId){
     .sort((a,b) => a.sort_order - b.sort_order)
     .map(pd => ({ pd, d: disciplines.find(x => x.code === pd.discipline_code) || null }));
 }
-// порядковый номер раздела в позиции = "номер позиции.номер группы" (напр. 1.2); группа —
-// это подряд идущие альбомы одного раздела (напр. КЖ1, КЖ2) — тогда добавляется ещё одна
-// цифра, номер альбома внутри группы (1.2.1, 1.2.2). Если одинаковый код встречается не
-// подряд (пользователь развёл их по разным местам списка) — это уже разные группы/номера
+// порядковый номер раздела в позиции — простая сквозная нумерация 1, 2, 3... в том
+// порядке, в каком строки расставлены стрелками (без группировки/подноменров по коду)
 function sectionOrderNumbers(positionId){
-  const p = positions.find(x => x.id === positionId);
-  const posCode = (p && p.position_code) ? String(p.position_code).trim() : '';
   const list = positionDisciplines
     .filter(pd => pd.position_id === positionId)
     .sort((a,b) => a.sort_order - b.sort_order);
   const result = {};
-  let topCounter = 0;
-  let i = 0;
-  while (i < list.length){
-    let j = i;
-    while (j < list.length && list[j].discipline_code === list[i].discipline_code) j++;
-    topCounter++;
-    const runLen = j - i;
-    for (let k = i; k < j; k++){
-      const sub = runLen > 1 ? `.${k - i + 1}` : '';
-      result[list[k].id] = `${posCode ? posCode+'.' : ''}${topCounter}${sub}`;
-    }
-    i = j;
-  }
+  list.forEach((pd, i) => { result[pd.id] = String(i + 1); });
   return result;
 }
 // шифр альбома по умолчанию = аббревиатура названия раздела + порядковый номер среди
@@ -1172,28 +1160,13 @@ function disciplinesForVolumeAll(volumeId){
     .sort((a,b) => a.sort_order - b.sort_order)
     .map(pd => ({ pd, d: disciplines.find(x => x.code === pd.discipline_code) || null }));
 }
-// № п.п. раздела в отдельном томе — та же логика, что sectionOrderNumbers (группа = подряд
-// идущие альбомы одного раздела), только префикс — номер тома, а не "Позиция по ГП"
+// № п.п. раздела в отдельном томе — та же простая сквозная нумерация, что sectionOrderNumbers
 function sectionOrderNumbersForVolume(volumeId){
-  const v = volumes.find(x => x.id === volumeId);
-  const volCode = (v && v.number) ? String(v.number).trim() : '';
   const list = positionDisciplines
     .filter(pd => pd.volume_id === volumeId)
     .sort((a,b) => a.sort_order - b.sort_order);
   const result = {};
-  let topCounter = 0;
-  let i = 0;
-  while (i < list.length){
-    let j = i;
-    while (j < list.length && list[j].discipline_code === list[i].discipline_code) j++;
-    topCounter++;
-    const runLen = j - i;
-    for (let k = i; k < j; k++){
-      const sub = runLen > 1 ? `.${k - i + 1}` : '';
-      result[list[k].id] = `${volCode ? volCode+'.' : ''}${topCounter}${sub}`;
-    }
-    i = j;
-  }
+  list.forEach((pd, i) => { result[pd.id] = String(i + 1); });
   return result;
 }
 // шифр альбома по умолчанию для альбома в отдельном томе — аналог defaultMarkerForAlbum
@@ -1336,6 +1309,92 @@ function discSheetRowsHtml(discs, owner){
   });
   return rows;
 }
+// строки MDR в виде массивов ячеек (та же иерархия и те же 8 колонок, что и в самой
+// таблице) — для выгрузки в CSV; используется и printable-таблицей, и экспортом
+function discSheetExportRows(discs, owner){
+  const out = [];
+  discs.forEach(({ pd, d }) => {
+    const marker = pd.marker || (owner.pos ? defaultMarkerForAlbum(owner.pos, pd.id) : defaultMarkerForVolumeAlbum(owner.vol, pd.id));
+    const designation = owner.pos ? computeDesignation(owner.pos, marker) : computeDesignationVolume(marker);
+    const responsibleName = resolvedResponsibleName(pd, d);
+    out.push([
+      pd.manual_number || '', '',
+      (d && (d.name_ru || d.name_en)) ? t(d.name_ru, d.name_en) : '',
+      designation, pd.note || '', responsibleName, '', '',
+    ]);
+    sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id)).forEach(s => {
+      out.push([
+        s.manual_number || '', '',
+        t(s.name_ru, s.name_en) || '',
+        designation, s.comment || '', '', s.revision || '', s.edition || '',
+      ]);
+    });
+  });
+  return out;
+}
+function buildMdrExportRows(){
+  const header = [
+    t('Номер тома / номер альбома','Volume / Album No.'),
+    t('№ по ГП','Position No.'),
+    t('Наименование документа','Document Name'),
+    t('Обозначение','Notation'),
+    t('Примечание','Remarks'),
+    t('Ответственный исполнитель','Responsible Person'),
+    t('Ревизия','Revision'),
+    t('Редакция','Edition'),
+  ];
+  const rows = [header];
+
+  const posList = sortedPositions();
+  const groups = posList.map(p => ({ p, discs: disciplinesForPositionAll(p.id) }));
+  const positionRows = [];
+  groups.forEach(({ p, discs }) => {
+    positionRows.push([
+      p.manual_number || '', p.position_code || '',
+      (p.name_ru || p.name_en) ? t(p.name_ru, p.name_en) : '',
+      '', '', '', '', '',
+    ]);
+    positionRows.push(...discSheetExportRows(discs, { pos: p.id }));
+  });
+
+  let positionRowsPlaced = false;
+  sortedVolumes().forEach(v => {
+    const volDiscs = v.is_positions_root ? [] : disciplinesForVolumeAll(v.id);
+    rows.push([
+      v.number || '', '',
+      t(v.name_ru, v.name_en) || '',
+      '', '', '', '', '',
+    ]);
+    if (v.is_positions_root){
+      rows.push(...positionRows);
+      positionRowsPlaced = true;
+    } else if (volDiscs.length){
+      rows.push(...discSheetExportRows(volDiscs, { vol: v.id }));
+    }
+  });
+  if (!positionRowsPlaced) rows.push(...positionRows);
+
+  return rows;
+}
+function csvEscapeCell(value){
+  const s = (value == null) ? '' : String(value);
+  return /[",;\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+// CSV открывается и в Excel, и в Google Таблицах без сторонних библиотек — простое и
+// надёжное решение без сборки проекта
+function downloadMdrCsv(){
+  const rows = buildMdrExportRows();
+  const csv = rows.map(row => row.map(csvEscapeCell).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM — чтобы кириллица не превратилась в кракозябры
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `MDR_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 function renderMdrTab(){
   const posList = sortedPositions();
   const groups = posList.map(p => ({ p, discs: disciplinesForPositionAll(p.id) }));
@@ -1386,6 +1445,7 @@ function renderMdrTab(){
       <div style="display:flex;gap:8px;">
         <button class="btn secondary small" id="btnAddMdrRow">+ Добавить том</button>
         <button class="btn secondary small" id="btnTranslateMdr">🌐 Перевести на EN</button>
+        <button class="btn secondary small" id="btnExportMdr">📥 Скачать (Excel/CSV)</button>
         <button class="btn small" id="btnPrintMdr">🖨 Печать</button>
       </div>
     </div>
@@ -1855,6 +1915,8 @@ function bindTabEvents(id){
   else if (id === 'mdr'){
     const btnPrint = document.getElementById('btnPrintMdr');
     if (btnPrint) btnPrint.addEventListener('click', () => window.print());
+
+    document.getElementById('btnExportMdr').addEventListener('click', () => downloadMdrCsv());
 
     document.getElementById('btnTranslateMdr').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
