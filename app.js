@@ -235,6 +235,16 @@ function disciplineNameOptionsHtml(){
   const extras = DISCIPLINE_NAME_SUGGESTIONS.filter(n => !existingLower.has(n.toLowerCase()));
   return [...existing, ...extras].map(n => `<option value="${esc(n)}">`).join('');
 }
+// надёжный способ привязать альбом к уже существующему разделу — напрямую по коду, а не
+// через сопоставление введённого текста с названием (то, что ниже, в .mAlbumNameRu, могло
+// создать дубль с новым автосгенерированным кодом, если название набрано не один-в-один)
+function disciplineSelectHtml(pd){
+  const matched = disciplines.find(x => x.code === pd.discipline_code);
+  return `<select class="text-like mAlbumDisciplineSelect" data-pdid="${pd.id}" style="width:100%;margin-bottom:4px;">
+    <option value="">— выбрать раздел из списка —</option>
+    ${sortedDisciplines().map(d => `<option value="${esc(d.code)}" ${matched && matched.code===d.code ? 'selected':''}>${esc(d.code||'?')} — ${esc(d.name_ru||'(без названия)')}</option>`).join('')}
+  </select>`;
+}
 
 // сортировка строк "Разделы и исполнители" по № п.п.
 // (напр. "1" < "1.1" < "1.2" < "2" < "3" — сравнение по числовым сегментам, не по алфавиту;
@@ -438,7 +448,8 @@ function renderStandaloneVolumeDetail(){
           <tr class="sec-disc-row-vol" data-pdid="${pd.id}" data-vol="${v.id}">
             <td style="font-family:var(--mono);font-weight:600;color:#fff;" title="Считается автоматически: номер тома.порядковый номер раздела">${esc(orderNumbers[pd.id] || '')}</td>
             <td>
-              <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="раздел не выбран — введите или выберите" style="display:block;width:100%;">
+              ${disciplineSelectHtml(pd)}
+              <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="или введите название нового раздела" style="display:block;width:100%;">
               <input type="text" class="text-like mAlbumNameEn lang-en" data-pdid="${pd.id}" value="${esc(d ? (d.name_en||'') : '')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;color:var(--muted);">
             </td>
             <td><input type="text" class="text-like mAlbumMarker" data-pdid="${pd.id}" value="${esc(pd.marker || defaultMarkerForVolumeAlbum(v.id, pd.id))}" placeholder="шифр" style="width:100%;font-weight:600;"></td>
@@ -582,7 +593,8 @@ function renderSectionsDetail(){
           <tr class="sec-disc-row" data-pdid="${pd.id}" data-pos="${p.id}">
             <td style="font-family:var(--mono);font-weight:600;color:#fff;" title="Считается автоматически: номер позиции.порядковый номер раздела">${esc(orderNumbers[pd.id] || '')}</td>
             <td>
-              <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="раздел не выбран — введите или выберите" style="display:block;width:100%;">
+              ${disciplineSelectHtml(pd)}
+              <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="или введите название нового раздела" style="display:block;width:100%;">
               <input type="text" class="text-like mAlbumNameEn lang-en" data-pdid="${pd.id}" value="${esc(d ? (d.name_en||'') : '')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;color:var(--muted);">
             </td>
             <td><input type="text" class="text-like mAlbumMarker" data-pdid="${pd.id}" value="${esc(pd.marker || defaultMarkerForAlbum(p.id, pd.id))}" placeholder="шифр" style="width:100%;font-weight:600;"></td>
@@ -604,6 +616,16 @@ function renderSectionsDetail(){
 // "Создание разделов" и MDR, т.к. обе рисуют строки с одинаковыми классами .mAlbumNameRu/.mAlbumNameEn/
 // .mAlbumMarker/.mAlbumNote/.btn-move-disc/.btn-del-mdr-disc
 function bindAlbumEditEvents(){
+  document.querySelectorAll('.mAlbumDisciplineSelect').forEach(el => el.addEventListener('change', async () => {
+    const pdid = el.dataset.pdid;
+    const code = el.value;
+    if (!code) return;
+    await dbWrite(sb.from('position_disciplines').update({ discipline_code: code }).eq('id', pdid));
+    const pdLink = positionDisciplines.find(x => x.id === pdid);
+    if (pdLink) pdLink.discipline_code = code;
+    renderTab(activeTab);
+  }));
+
   document.querySelectorAll('.mAlbumNameRu, .mAlbumNameEn').forEach(el => el.addEventListener('change', async () => {
     const pdid = el.dataset.pdid;
     const pdLink = positionDisciplines.find(x => x.id === pdid);
