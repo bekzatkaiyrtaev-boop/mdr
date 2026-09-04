@@ -977,11 +977,6 @@ function titulFrameHtml(v, withSignatures){
   <div class="titul-page">
     <div class="titul-frame">
       <div class="titul-content">
-        ${withSignatures ? `
-        <div class="t-sign-block">
-          <div class="t-sign-row"><span>Director of ${esc(p.company_name_en||'')} / <i>Директор ${esc(p.company_name_ru||'')}</i></span><span class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</span></div>
-          <div class="t-sign-row"><span>Chief project engineer / <i>Главный инженер проекта</i></span><span class="t-sign-name">${esc(gip)}</span></div>
-        </div>` : `<div class="t-sign-block t-sign-empty"></div>`}
         <div class="t-rule"></div>
 
         <div class="t-org">
@@ -1005,7 +1000,12 @@ function titulFrameHtml(v, withSignatures){
           <div><i>${esc(p.name_ru||'')}</i></div>
         </div>
         <div class="t-stage">${esc(p.stage_en||'')} / <i>${esc(p.stage_ru||'')}</i></div>
-        <div class="t-spacer"></div>
+
+        ${withSignatures ? `
+        <div class="t-sign-block">
+          <div class="t-sign-row"><span>Director of ${esc(p.company_name_en||'')} / <i>Директор ${esc(p.company_name_ru||'')}</i></span><span class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</span></div>
+          <div class="t-sign-row"><span>Chief project engineer / <i>Главный инженер проекта</i></span><span class="t-sign-name">${esc(gip)}</span></div>
+        </div>` : `<div class="t-sign-block t-sign-empty"></div>`}
 
         <div class="t-city">${esc(p.city_en||'')} ${year} / <i>г.${esc(p.city_ru||'')} ${year} г.</i></div>
       </div>
