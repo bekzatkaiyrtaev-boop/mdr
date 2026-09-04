@@ -734,6 +734,8 @@ function bindAlbumEditEvents(){
 function bindSectionsDetailEvents(){
   const btnAdd = document.getElementById('btnAddSection');
   if (btnAdd) btnAdd.addEventListener('click', async (e) => {
+    e.stopPropagation(); // иначе этот же клик долетает до document и document→hideContextMenu
+    // тут же закрывает список, который мы открываем ниже (см. showContextMenu для инженера)
     const pos = positions.find(x => x.id === sectionsPositionId);
     if (!pos) return;
     const existing = positionDisciplines.filter(pd => pd.position_id === pos.id);
@@ -798,6 +800,8 @@ function bindSectionsDetailEvents(){
 function bindStandaloneVolumeDetailEvents(){
   const btnAdd = document.getElementById('btnAddStandaloneSection');
   if (btnAdd) btnAdd.addEventListener('click', async (e) => {
+    e.stopPropagation(); // иначе этот же клик долетает до document и document→hideContextMenu
+    // тут же закрывает список, который мы открываем ниже (см. showContextMenu для инженера)
     const vol = volumes.find(x => x.id === standaloneVolumeId);
     if (!vol) return;
     const existing = positionDisciplines.filter(pd => pd.volume_id === vol.id);
