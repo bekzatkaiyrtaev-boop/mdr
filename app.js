@@ -1024,13 +1024,19 @@ function openTitulWindow(v){
   const win = window.open('', '_blank');
   if (!win){ alert('Браузер заблокировал всплывающее окно — разрешите всплывающие окна для этого сайта и повторите.'); return; }
   const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Титульный лист — ${esc(v.designation)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=PT+Sans+Narrow:wght@400;700&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; }
     @page { size: A4 portrait; margin: 0; }
     body {
       margin: 0; color:#000; background:#ccc;
-      font-family: 'ISOCPEUR', 'ISOCP', 'GOST type A', Consolas, 'Courier New', monospace;
-      font-style: italic;
+      /* ISOCPEUR/ISOCP/GOST type A — настоящие чертёжные шрифты AutoCAD, есть не у всех;
+         PT Sans Narrow — свободный веб-шрифт, разработанный под кириллицу и ГОСТ-документы,
+         ближе всего по рисунку к чертёжному шрифту среди гарантированно доступных в браузере */
+      font-family: 'ISOCPEUR', 'ISOCP', 'GOST type A', 'PT Sans Narrow', Arial, sans-serif;
+      font-style: normal;
     }
     .titul-page { width: 210mm; height: 297mm; padding: 8mm; background:#fff; margin: 0 auto 8mm auto; page-break-after: always; }
     .titul-page:last-of-type { page-break-after: auto; }
