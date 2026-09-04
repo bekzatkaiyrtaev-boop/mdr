@@ -992,7 +992,6 @@ function titulFrameHtml(v, withSignatures){
           <div>${esc(v.objectEn)}</div>
           <div><i>${esc(v.objectRu)}</i></div>
         </div>
-        ${v.volumeNumber ? `<div class="t-volume">Volume ${esc(v.volumeNumber)} / <i>Том ${esc(v.volumeNumber)}</i></div>` : ''}
         <div class="t-spacer"></div>
 
         <div class="t-project">
@@ -1007,6 +1006,7 @@ function titulFrameHtml(v, withSignatures){
           <div class="t-sign-row"><span>Chief project engineer / <i>Главный инженер проекта</i></span><span class="t-sign-name">${esc(gip)}</span></div>
         </div>` : `<div class="t-sign-block t-sign-empty"></div>`}
 
+        ${v.volumeNumber ? `<div class="t-volume">Volume ${esc(v.volumeNumber)} / <i>Том ${esc(v.volumeNumber)}</i></div>` : ''}
         <div class="t-city">${esc(p.city_en||'')} ${year} / <i>г.${esc(p.city_ru||'')} ${year} г.</i></div>
       </div>
     </div>
@@ -1157,25 +1157,30 @@ function bindSheetCompDetailEvents(){
     const d = pd ? disciplines.find(x => x.code === pd.discipline_code) : null;
     if (!pd || !d) return;
     const { kind, id } = parseSheetCompContainer();
-    let ownerRu = '', ownerEn = '', marker, designation;
+    let ownerRu = '', ownerEn = '', marker, designation, volumeNumber;
     if (kind === 'vol'){
       const v = volumes.find(x => x.id === id);
       if (!v) return;
       ownerRu = v.name_ru || ''; ownerEn = v.name_en || '';
       marker = pd.marker || defaultMarkerForVolumeAlbum(v.id, pd.id);
       designation = computeDesignationVolume(marker);
+      volumeNumber = v.number || ''; // альбом прямо в томе — номер этого самого тома
     } else {
       const p = positions.find(x => x.id === id);
       if (!p) return;
       ownerRu = p.name_ru || ''; ownerEn = p.name_en || '';
       marker = pd.marker || defaultMarkerForAlbum(p.id, pd.id);
       designation = computeDesignation(p.id, marker);
+      // альбом внутри позиции — на титуле указывается номер тома, в который вложены
+      // позиции по генплану (volumes.is_positions_root), а не номер самой позиции
+      const rootVol = volumes.find(x => x.is_positions_root);
+      volumeNumber = rootVol ? (rootVol.number || '') : '';
     }
     openTitulWindow({
       designation,
       disciplineRu: d.name_ru || '', disciplineEn: d.name_en || '',
       objectRu: ownerRu, objectEn: ownerEn,
-      volumeNumber: pd.manual_number || '',
+      volumeNumber,
     });
   });
 
