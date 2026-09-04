@@ -1011,8 +1011,8 @@ function titulFrameHtml(v, withSignatures){
 
         ${withSignatures ? `
         <div class="t-sign-block">
-          <div class="t-sign-row"><span>Director of ${esc(p.company_name_en||'')} / Директор ${esc(p.company_name_ru||'')}</span><span class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</span></div>
-          <div class="t-sign-row"><span>Chief project engineer / Главный инженер проекта</span><span class="t-sign-name">${esc(gip)}</span></div>
+          <div class="t-sign-row"><div>Director of ${esc(p.company_name_en||'')} / Директор ${esc(p.company_name_ru||'')}</div><div class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</div></div>
+          <div class="t-sign-row"><div>Chief project engineer / Главный инженер проекта</div><div class="t-sign-name">${esc(gip)}</div></div>
         </div>` : `<div class="t-sign-block t-sign-empty"></div>`}
 
         <div class="t-city">${esc(p.city_en||'')} ${esc(year)} / г.${esc(p.city_ru||'')} ${esc(year)} г.</div>
@@ -1026,41 +1026,41 @@ function openTitulWindow(v){
   const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Титульный лист — ${esc(v.designation)}</title>
   <style>
     * { box-sizing: border-box; }
-    @page { size: A4 portrait; margin: 0; }
+    /* печатаем альбомно (не портретно + CSS-поворот) — поворот текста через
+       transform+position:absolute+overflow:hidden ненадёжен именно при печати/экспорте
+       в PDF (в разных браузерах часть блоков может съезжать или наезжать друг на друга).
+       Обычный, не повёрнутый flex-ряд на альбомной странице печатается без сюрпризов —
+       после печати достаточно повернуть сам лист на 90° при подшивке в альбом */
+    @page { size: A4 landscape; margin: 0; }
     body {
       margin: 0; color:#000; background:#ccc;
       font-family: 'ISOCPEUR', 'ISOCP', 'GOST type A', Consolas, 'Courier New', monospace;
       font-style: italic;
     }
-    .titul-page { width: 210mm; height: 297mm; padding: 8mm; background:#fff; margin: 0 auto 8mm auto; page-break-after: always; }
+    .titul-page { width: 297mm; height: 210mm; padding: 8mm; background:#fff; margin: 0 auto 8mm auto; page-break-after: always; }
     .titul-page:last-of-type { page-break-after: auto; }
-    .titul-frame { width: 100%; height: 100%; border: 1.5pt solid #000; position: relative; overflow: hidden; }
+    .titul-frame { width: 100%; height: 100%; border: 1.5pt solid #000; }
     .titul-content {
-      position: absolute; top: 50%; left: 50%; width: 277mm;
-      transform: translate(-50%, -50%) rotate(-90deg);
-      display: flex; flex-direction: column; align-items: center; text-align: center;
-      padding: 0 2mm;
+      width: 100%; height: 100%;
+      display: flex; flex-direction: row; align-items: center; text-align: center;
+      padding: 0 4mm;
     }
-    .titul-content > div { margin: 1mm 0; }
-    /* шапка (организация + линия) — прижата к одному краю листа, город/год — к другому;
-       остальной контент остаётся по центру между ними (см. align-self ниже) */
-    .t-header { align-self: flex-end; width:100%; }
-    .t-city { align-self: flex-start; width:100%; }
-    .t-sign-block { width:100%; font-size: 10pt; }
-    .t-sign-empty { height: 12mm; }
-    .t-sign-row { display:flex; justify-content:space-between; gap:12mm; margin:1mm 0; }
-    .t-sign-name { font-weight:600; white-space:nowrap; }
-    .t-rule { width:100%; border-top: 0.75pt solid #000; margin: 1mm 0 2mm; }
-    .t-org { font-size: 11pt; line-height:1.35; }
+    .titul-content > div { margin: 0 2mm; flex: 1 1 0; min-width: 0; }
+    .t-sign-block { font-size: 9pt; }
+    .t-sign-empty { flex: 0.6 1 0; }
+    .t-sign-row { margin: 1mm 0; }
+    .t-sign-name { font-weight:600; }
+    .t-rule { border-top: 0.75pt solid #000; margin: 2mm 0; }
+    .t-org { font-size: 10pt; line-height:1.35; }
     .t-org-name { font-weight:600; }
-    .t-spacer { height: 8mm; }
-    .t-project { font-size: 18pt; font-weight:700; line-height:1.25; max-width: 260mm; }
-    .t-object { font-size: 14pt; line-height:1.25; }
-    .t-designation { font-size: 30pt; font-weight:700; letter-spacing:0.5pt; }
-    .t-discipline { font-size: 13pt; font-weight:700; }
-    .t-stage { font-size: 12pt; }
-    .t-vol-album { font-size: 11pt; }
-    .t-city { font-size: 11pt; }
+    .t-spacer { flex: 0.3 1 0; margin: 0; }
+    .t-project { font-size: 15pt; font-weight:700; line-height:1.25; flex: 1.4 1 0; }
+    .t-object { font-size: 12pt; line-height:1.25; }
+    .t-designation { font-size: 22pt; font-weight:700; letter-spacing:0.5pt; }
+    .t-discipline { font-size: 11pt; font-weight:700; }
+    .t-stage { font-size: 10pt; }
+    .t-vol-album { font-size: 10pt; }
+    .t-city { font-size: 10pt; flex: 0.7 1 0; }
     .no-print { position:fixed; top:10px; right:10px; z-index:10; padding:8px 16px; font-family:Arial,sans-serif; font-style:normal; font-size:14px; cursor:pointer; background:#2563eb; color:#fff; border:none; border-radius:6px; }
     @media print { body { background:#fff; } .titul-page { margin:0; } .no-print { display:none; } }
   </style>
