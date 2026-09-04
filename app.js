@@ -311,6 +311,23 @@ function renderProjectTab(){
     </div>
   </div>
   <div class="card">
+    <div class="card-header"><span class="title">Реквизиты для титульного листа</span></div>
+    <div class="card-body">
+      <div class="field-grid">
+        <div class="field lang-ru"><label>Организация (RU)</label><input type="text" id="pCompanyRu" value="${esc(project?.company_name_ru)}" placeholder="ТОО «...»"></div>
+        <div class="field lang-en"><label>Организация (EN)</label><input type="text" id="pCompanyEn" value="${esc(project?.company_name_en)}" placeholder="\"...\" LLP"></div>
+        <div class="field"><label>№ ГСЛ</label><input type="text" id="pLicense" value="${esc(project?.license_number)}" placeholder="напр. №2402977"></div>
+        <div class="field lang-ru"><label>Директор — ФИО (RU)</label><input type="text" id="pDirectorRu" value="${esc(project?.director_name_ru)}"></div>
+        <div class="field lang-en"><label>Директор — ФИО (EN)</label><input type="text" id="pDirectorEn" value="${esc(project?.director_name_en)}"></div>
+        <div class="field lang-ru"><label>Город (RU)</label><input type="text" id="pCityRu" value="${esc(project?.city_ru)}" placeholder="напр. Астана"></div>
+        <div class="field lang-en"><label>Город (EN)</label><input type="text" id="pCityEn" value="${esc(project?.city_en)}" placeholder="напр. Astana"></div>
+        <div class="field lang-ru"><label>Стадия (RU)</label><input type="text" id="pStageRu" value="${esc(project?.stage_ru)}" placeholder="напр. Рабочая документация"></div>
+        <div class="field lang-en"><label>Стадия (EN)</label><input type="text" id="pStageEn" value="${esc(project?.stage_en)}" placeholder="напр. Detailed design documentation"></div>
+      </div>
+      <div style="margin-top:14px;"><button class="btn" id="btnSaveProjectTitul">Сохранить</button></div>
+    </div>
+  </div>
+  <div class="card">
     <div class="card-header">
       <span class="title">Разделы и исполнители</span>
       <button class="btn small" id="btnAddDiscipline">+ Добавить раздел</button>
@@ -941,6 +958,107 @@ function renderSheetCompTab(){
   <div id="sheetCompDetail">${renderSheetCompDetail()}</div>`;
 }
 
+// ---------------- титульный лист альбома (2 страницы, печать через window.print()) ----------------
+// ФИО ГИПа берём из зарегистрированных profiles (роль gip или закреплённый администратор);
+// если ГИП ещё не зарегистрировался — пробуем справочник employees (см. "Пользователи")
+function projectGipName(){
+  const fromProfiles = allProfiles.find(p => p.role === 'gip' || isAdminEmail(p.email));
+  if (fromProfiles) return (fromProfiles.full_name || fromProfiles.email || '').trim();
+  const fromEmployees = employees.find(e => e.role === 'gip');
+  return fromEmployees ? (fromEmployees.full_name || '').trim() : '';
+}
+// один "лист" титула — рамка А4 с повёрнутым на 90° содержимым (как в переплетённом альбоме);
+// withSignatures=false — первая страница (пустое место под подпись), true — вторая (со ФИО)
+function titulFrameHtml(v, withSignatures){
+  const p = project || {};
+  const year = new Date().getFullYear();
+  const gip = projectGipName();
+  return `
+  <div class="titul-page">
+    <div class="titul-frame">
+      <div class="titul-content">
+        ${withSignatures ? `
+        <div class="t-sign-block">
+          <div class="t-sign-row"><span>Director of ${esc(p.company_name_en||'')} / <i>Директор ${esc(p.company_name_ru||'')}</i></span><span class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</span></div>
+          <div class="t-sign-row"><span>Chief project engineer / <i>Главный инженер проекта</i></span><span class="t-sign-name">${esc(gip)}</span></div>
+        </div>` : `<div class="t-sign-block t-sign-empty"></div>`}
+        <div class="t-rule"></div>
+
+        <div class="t-org">
+          <div>Project Organization / <i>Проектная организация</i></div>
+          <div class="t-org-name">${esc(p.company_name_en||'')} / <i>${esc(p.company_name_ru||'')}</i></div>
+          <div>SL / <i>ГСЛ</i> №${esc(p.license_number||'')}</div>
+        </div>
+
+        <div class="t-spacer"></div>
+        <div class="t-designation">${esc(v.designation)}</div>
+        <div class="t-discipline">${esc(v.disciplineEn)} / <i>${esc(v.disciplineRu)}</i></div>
+        <div class="t-object">
+          <div>${esc(v.objectEn)}</div>
+          <div><i>${esc(v.objectRu)}</i></div>
+        </div>
+        ${v.volumeNumber ? `<div class="t-volume">Volume ${esc(v.volumeNumber)} / <i>Том ${esc(v.volumeNumber)}</i></div>` : ''}
+        <div class="t-spacer"></div>
+
+        <div class="t-project">
+          <div>${esc(p.name_en||'')}</div>
+          <div><i>${esc(p.name_ru||'')}</i></div>
+        </div>
+        <div class="t-stage">${esc(p.stage_en||'')} / <i>${esc(p.stage_ru||'')}</i></div>
+        <div class="t-spacer"></div>
+
+        <div class="t-city">${esc(p.city_en||'')} ${year} / <i>г.${esc(p.city_ru||'')} ${year} г.</i></div>
+      </div>
+    </div>
+  </div>`;
+}
+function openTitulWindow(v){
+  const win = window.open('', '_blank');
+  if (!win){ alert('Браузер заблокировал всплывающее окно — разрешите всплывающие окна для этого сайта и повторите.'); return; }
+  const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Титульный лист — ${esc(v.designation)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    @page { size: A4 portrait; margin: 0; }
+    body { margin: 0; font-family: 'Times New Roman', Georgia, serif; color:#000; background:#ccc; }
+    .titul-page { width: 210mm; height: 297mm; padding: 8mm; background:#fff; margin: 0 auto 8mm auto; page-break-after: always; }
+    .titul-page:last-of-type { page-break-after: auto; }
+    .titul-frame { width: 100%; height: 100%; border: 1.5pt solid #000; position: relative; overflow: hidden; }
+    .titul-content {
+      position: absolute; top: 50%; left: 50%; width: 277mm;
+      transform: translate(-50%, -50%) rotate(-90deg);
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      padding: 0 14mm;
+    }
+    .titul-content > div { margin: 2mm 0; }
+    .t-sign-block { width:100%; font-size: 10pt; }
+    .t-sign-empty { height: 16mm; }
+    .t-sign-row { display:flex; justify-content:space-between; gap:12mm; margin:1.5mm 0; }
+    .t-sign-name { font-weight:600; white-space:nowrap; }
+    .t-rule { width:100%; border-top: 0.75pt solid #000; margin: 2mm 0 4mm; }
+    .t-org { font-size: 10pt; line-height:1.5; }
+    .t-org-name { font-weight:600; }
+    .t-spacer { height: 12mm; }
+    .t-designation { font-size: 20pt; font-weight:700; letter-spacing:0.5pt; }
+    .t-discipline { font-size: 13pt; font-weight:700; }
+    .t-object { font-size: 14pt; line-height:1.4; }
+    .t-volume { font-size: 11pt; margin-top:4mm; }
+    .t-project { font-size: 13pt; line-height:1.4; max-width: 190mm; }
+    .t-stage { font-size: 12pt; }
+    .t-city { font-size: 10pt; }
+    i { font-style: italic; }
+    .no-print { position:fixed; top:10px; right:10px; z-index:10; padding:8px 16px; font-family:Arial,sans-serif; font-size:14px; cursor:pointer; background:#2563eb; color:#fff; border:none; border-radius:6px; }
+    @media print { body { background:#fff; } .titul-page { margin:0; } .no-print { display:none; } }
+  </style>
+  </head><body>
+  <button class="no-print" onclick="window.print()">🖨 Печать</button>
+  ${titulFrameHtml(v, false)}
+  ${titulFrameHtml(v, true)}
+  </body></html>`;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
 function renderSheetCompDetail(){
   const { kind, id } = parseSheetCompContainer();
   if (!id || !sheetCompAlbumId) return '';
@@ -968,7 +1086,10 @@ function renderSheetCompDetail(){
   <div class="card">
     <div class="card-header" style="background:var(--accent);">
       <span class="title" style="color:#fff;">${esc(ownerLabel)} — ${esc(marker)} ${esc(t(d.name_ru,d.name_en)||'')}</span>
-      ${canEdit ? `<button class="btn small" id="btnAddSheet">+ добавить лист</button>` : ''}
+      <div style="display:flex;gap:8px;">
+        <button class="btn small secondary" id="btnTitulSheet" title="Открыть титульный лист альбома (2 страницы) в новой вкладке для печати">🖨 Титульный лист</button>
+        ${canEdit ? `<button class="btn small" id="btnAddSheet">+ добавить лист</button>` : ''}
+      </div>
     </div>
     <div class="card-body" style="padding:0;">
       <table style="table-layout:fixed;">
@@ -1029,6 +1150,35 @@ async function insertSheetAdjacent(targetSheetId, dir){
   bindSheetCompDetailEvents();
 }
 function bindSheetCompDetailEvents(){
+  const btnTitul = document.getElementById('btnTitulSheet');
+  if (btnTitul) btnTitul.addEventListener('click', () => {
+    if (!project) return alert('Сначала заполните вкладку «Проект» (шапку и реквизиты для титульного листа).');
+    const pd = positionDisciplines.find(x => x.id === sheetCompAlbumId);
+    const d = pd ? disciplines.find(x => x.code === pd.discipline_code) : null;
+    if (!pd || !d) return;
+    const { kind, id } = parseSheetCompContainer();
+    let ownerRu = '', ownerEn = '', marker, designation;
+    if (kind === 'vol'){
+      const v = volumes.find(x => x.id === id);
+      if (!v) return;
+      ownerRu = v.name_ru || ''; ownerEn = v.name_en || '';
+      marker = pd.marker || defaultMarkerForVolumeAlbum(v.id, pd.id);
+      designation = computeDesignationVolume(marker);
+    } else {
+      const p = positions.find(x => x.id === id);
+      if (!p) return;
+      ownerRu = p.name_ru || ''; ownerEn = p.name_en || '';
+      marker = pd.marker || defaultMarkerForAlbum(p.id, pd.id);
+      designation = computeDesignation(p.id, marker);
+    }
+    openTitulWindow({
+      designation,
+      disciplineRu: d.name_ru || '', disciplineEn: d.name_en || '',
+      objectRu: ownerRu, objectEn: ownerEn,
+      volumeNumber: pd.manual_number || '',
+    });
+  });
+
   const btnAdd = document.getElementById('btnAddSheet');
   if (btnAdd) btnAdd.addEventListener('click', async () => {
     const pd = positionDisciplines.find(x => x.id === sheetCompAlbumId);
@@ -1855,6 +2005,25 @@ function bindTabEvents(id){
       };
       if (project) await dbWrite(sb.from('projects').update(payload).eq('id', project.id));
       else await dbWrite(sb.from('projects').insert(payload));
+      await loadAll(); switchTab('project');
+    });
+
+    document.getElementById('btnSaveProjectTitul').addEventListener('click', async () => {
+      if (!project) return alert('Сначала сохраните шапку проекта (номер договора и наименование) — реквизиты титула привязаны к проекту.');
+      const payload = {
+        company_name_ru: document.getElementById('pCompanyRu').value.trim() || null,
+        company_name_en: document.getElementById('pCompanyEn').value.trim() || null,
+        license_number: document.getElementById('pLicense').value.trim() || null,
+        director_name_ru: document.getElementById('pDirectorRu').value.trim() || null,
+        director_name_en: document.getElementById('pDirectorEn').value.trim() || null,
+        city_ru: document.getElementById('pCityRu').value.trim() || null,
+        city_en: document.getElementById('pCityEn').value.trim() || null,
+        stage_ru: document.getElementById('pStageRu').value.trim() || null,
+        stage_en: document.getElementById('pStageEn').value.trim() || null,
+        updated_by: profile.id,
+        updated_at: new Date().toISOString(),
+      };
+      await dbWrite(sb.from('projects').update(payload).eq('id', project.id));
       await loadAll(); switchTab('project');
     });
 

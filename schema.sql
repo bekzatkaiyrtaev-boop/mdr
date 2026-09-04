@@ -135,6 +135,17 @@ create table public.projects (
   contract_number text,
   name_ru text,
   name_en text,
+  -- реквизиты для титульного листа альбома (см. "Проект" → "Реквизиты для титульного
+  -- листа") — заполняются один раз на проект, дальше просто подставляются на каждый титул
+  company_name_ru text,
+  company_name_en text,
+  license_number text,        -- "ГСЛ №..."
+  director_name_ru text,
+  director_name_en text,
+  city_ru text,
+  city_en text,
+  stage_ru text,               -- стадия проектной документации, напр. "Рабочая документация"
+  stage_en text,
   updated_by uuid references public.profiles(id),
   updated_at timestamptz not null default now()
 );
