@@ -323,6 +323,7 @@ function renderProjectTab(){
         <div class="field lang-en"><label>Город (EN)</label><input type="text" id="pCityEn" value="${esc(project?.city_en)}" placeholder="напр. Astana"></div>
         <div class="field lang-ru"><label>Стадия (RU)</label><input type="text" id="pStageRu" value="${esc(project?.stage_ru)}" placeholder="напр. Рабочая документация"></div>
         <div class="field lang-en"><label>Стадия (EN)</label><input type="text" id="pStageEn" value="${esc(project?.stage_en)}" placeholder="напр. Detailed design documentation"></div>
+        <div class="field"><label>Год договора</label><input type="text" id="pContractYear" value="${esc(project?.contract_year)}" placeholder="напр. 2026" title="Год на титуле — год заключения договора, не текущий год печати"></div>
       </div>
       <div style="margin-top:14px;"><button class="btn" id="btnSaveProjectTitul">Сохранить</button></div>
     </div>
@@ -971,8 +972,9 @@ function projectGipName(){
 // withSignatures=false — первая страница (пустое место под подпись), true — вторая (со ФИО)
 function titulFrameHtml(v, withSignatures){
   const p = project || {};
-  const year = new Date().getFullYear();
+  const year = (p.contract_year || '').trim() || new Date().getFullYear();
   const gip = projectGipName();
+  const hasObject = !!(v.objectRu || v.objectEn);
   return `
   <div class="titul-page">
     <div class="titul-frame">
@@ -980,34 +982,38 @@ function titulFrameHtml(v, withSignatures){
         <div class="t-rule"></div>
 
         <div class="t-org">
-          <div>Project Organization / <i>Проектная организация</i></div>
-          <div class="t-org-name">${esc(p.company_name_en||'')} / <i>${esc(p.company_name_ru||'')}</i></div>
-          <div>SL / <i>ГСЛ</i> №${esc(p.license_number||'')}</div>
-        </div>
-
-        <div class="t-spacer"></div>
-        <div class="t-designation">${esc(v.designation)}</div>
-        <div class="t-discipline">${esc(v.disciplineEn)} / <i>${esc(v.disciplineRu)}</i></div>
-        <div class="t-object">
-          <div>${esc(v.objectEn)}</div>
-          <div><i>${esc(v.objectRu)}</i></div>
+          <div>Project Organization / Проектная организация</div>
+          <div class="t-org-name">${esc(p.company_name_en||'')} / ${esc(p.company_name_ru||'')}</div>
+          <div>SL / ГСЛ №${esc(p.license_number||'')}</div>
         </div>
         <div class="t-spacer"></div>
 
         <div class="t-project">
           <div>${esc(p.name_en||'')}</div>
-          <div><i>${esc(p.name_ru||'')}</i></div>
+          <div>${esc(p.name_ru||'')}</div>
         </div>
-        <div class="t-stage">${esc(p.stage_en||'')} / <i>${esc(p.stage_ru||'')}</i></div>
+        <div class="t-spacer"></div>
+
+        ${hasObject ? `
+        <div class="t-object">
+          <div>${esc(v.objectEn)}</div>
+          <div>${esc(v.objectRu)}</div>
+        </div>
+        <div class="t-spacer"></div>` : ''}
+
+        <div class="t-designation">${esc(v.designation)}</div>
+        <div class="t-discipline">${esc(v.disciplineEn)} / ${esc(v.disciplineRu)}</div>
+        <div class="t-spacer"></div>
+
+        <div class="t-stage">${esc(p.stage_en||'')} / ${esc(p.stage_ru||'')}</div>
 
         ${withSignatures ? `
         <div class="t-sign-block">
-          <div class="t-sign-row"><span>Director of ${esc(p.company_name_en||'')} / <i>Директор ${esc(p.company_name_ru||'')}</i></span><span class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</span></div>
-          <div class="t-sign-row"><span>Chief project engineer / <i>Главный инженер проекта</i></span><span class="t-sign-name">${esc(gip)}</span></div>
+          <div class="t-sign-row"><span>Director of ${esc(p.company_name_en||'')} / Директор ${esc(p.company_name_ru||'')}</span><span class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</span></div>
+          <div class="t-sign-row"><span>Chief project engineer / Главный инженер проекта</span><span class="t-sign-name">${esc(gip)}</span></div>
         </div>` : `<div class="t-sign-block t-sign-empty"></div>`}
 
-        ${v.volumeNumber ? `<div class="t-volume">Volume ${esc(v.volumeNumber)} / <i>Том ${esc(v.volumeNumber)}</i></div>` : ''}
-        <div class="t-city">${esc(p.city_en||'')} ${year} / <i>г.${esc(p.city_ru||'')} ${year} г.</i></div>
+        <div class="t-city">${esc(p.city_en||'')} ${esc(year)} / г.${esc(p.city_ru||'')} ${esc(year)} г.</div>
       </div>
     </div>
   </div>`;
@@ -1019,7 +1025,11 @@ function openTitulWindow(v){
   <style>
     * { box-sizing: border-box; }
     @page { size: A4 portrait; margin: 0; }
-    body { margin: 0; font-family: 'Times New Roman', Georgia, serif; color:#000; background:#ccc; }
+    body {
+      margin: 0; color:#000; background:#ccc;
+      font-family: 'ISOCPEUR', 'ISOCP', 'GOST type A', Consolas, 'Courier New', monospace;
+      font-style: italic;
+    }
     .titul-page { width: 210mm; height: 297mm; padding: 8mm; background:#fff; margin: 0 auto 8mm auto; page-break-after: always; }
     .titul-page:last-of-type { page-break-after: auto; }
     .titul-frame { width: 100%; height: 100%; border: 1.5pt solid #000; position: relative; overflow: hidden; }
@@ -1038,15 +1048,13 @@ function openTitulWindow(v){
     .t-org { font-size: 10pt; line-height:1.5; }
     .t-org-name { font-weight:600; }
     .t-spacer { height: 12mm; }
-    .t-designation { font-size: 20pt; font-weight:700; letter-spacing:0.5pt; }
-    .t-discipline { font-size: 13pt; font-weight:700; }
+    .t-project { font-size: 22pt; font-weight:700; line-height:1.35; max-width: 220mm; }
     .t-object { font-size: 14pt; line-height:1.4; }
-    .t-volume { font-size: 11pt; margin-top:4mm; }
-    .t-project { font-size: 13pt; line-height:1.4; max-width: 190mm; }
+    .t-designation { font-size: 18pt; font-weight:700; letter-spacing:0.5pt; }
+    .t-discipline { font-size: 13pt; font-weight:700; }
     .t-stage { font-size: 12pt; }
     .t-city { font-size: 10pt; }
-    i { font-style: italic; }
-    .no-print { position:fixed; top:10px; right:10px; z-index:10; padding:8px 16px; font-family:Arial,sans-serif; font-size:14px; cursor:pointer; background:#2563eb; color:#fff; border:none; border-radius:6px; }
+    .no-print { position:fixed; top:10px; right:10px; z-index:10; padding:8px 16px; font-family:Arial,sans-serif; font-style:normal; font-size:14px; cursor:pointer; background:#2563eb; color:#fff; border:none; border-radius:6px; }
     @media print { body { background:#fff; } .titul-page { margin:0; } .no-print { display:none; } }
   </style>
   </head><body>
@@ -1157,30 +1165,24 @@ function bindSheetCompDetailEvents(){
     const d = pd ? disciplines.find(x => x.code === pd.discipline_code) : null;
     if (!pd || !d) return;
     const { kind, id } = parseSheetCompContainer();
-    let ownerRu = '', ownerEn = '', marker, designation, volumeNumber;
+    let ownerRu = '', ownerEn = '', marker, designation;
     if (kind === 'vol'){
       const v = volumes.find(x => x.id === id);
       if (!v) return;
       ownerRu = v.name_ru || ''; ownerEn = v.name_en || '';
       marker = pd.marker || defaultMarkerForVolumeAlbum(v.id, pd.id);
       designation = computeDesignationVolume(marker);
-      volumeNumber = v.number || ''; // альбом прямо в томе — номер этого самого тома
     } else {
       const p = positions.find(x => x.id === id);
       if (!p) return;
       ownerRu = p.name_ru || ''; ownerEn = p.name_en || '';
       marker = pd.marker || defaultMarkerForAlbum(p.id, pd.id);
       designation = computeDesignation(p.id, marker);
-      // альбом внутри позиции — на титуле указывается номер тома, в который вложены
-      // позиции по генплану (volumes.is_positions_root), а не номер самой позиции
-      const rootVol = volumes.find(x => x.is_positions_root);
-      volumeNumber = rootVol ? (rootVol.number || '') : '';
     }
     openTitulWindow({
       designation,
       disciplineRu: d.name_ru || '', disciplineEn: d.name_en || '',
       objectRu: ownerRu, objectEn: ownerEn,
-      volumeNumber,
     });
   });
 
@@ -2025,6 +2027,7 @@ function bindTabEvents(id){
         city_en: document.getElementById('pCityEn').value.trim() || null,
         stage_ru: document.getElementById('pStageRu').value.trim() || null,
         stage_en: document.getElementById('pStageEn').value.trim() || null,
+        contract_year: document.getElementById('pContractYear').value.trim() || null,
         updated_by: profile.id,
         updated_at: new Date().toISOString(),
       };

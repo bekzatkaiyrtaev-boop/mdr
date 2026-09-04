@@ -146,6 +146,7 @@ create table public.projects (
   city_en text,
   stage_ru text,               -- стадия проектной документации, напр. "Рабочая документация"
   stage_en text,
+  contract_year text,          -- год на титуле — год заключения договора, не текущий год печати
   updated_by uuid references public.profiles(id),
   updated_at timestamptz not null default now()
 );
