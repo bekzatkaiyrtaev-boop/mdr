@@ -979,13 +979,12 @@ function titulFrameHtml(v, withSignatures){
   <div class="titul-page">
     <div class="titul-frame">
       <div class="titul-content">
-        <div class="t-rule"></div>
-
         <div class="t-org">
           <div>Project Organization / Проектная организация</div>
           <div class="t-org-name">${esc(p.company_name_en||'')} / ${esc(p.company_name_ru||'')}</div>
           <div>SL / ГСЛ №${esc(p.license_number||'')}</div>
         </div>
+        <div class="t-rule"></div>
         <div class="t-spacer"></div>
 
         <div class="t-project">
@@ -1039,21 +1038,21 @@ function openTitulWindow(v){
       display: flex; flex-direction: column; align-items: center; text-align: center;
       padding: 0 14mm;
     }
-    .titul-content > div { margin: 2mm 0; }
-    .t-sign-block { width:100%; font-size: 10pt; }
-    .t-sign-empty { height: 16mm; }
-    .t-sign-row { display:flex; justify-content:space-between; gap:12mm; margin:1.5mm 0; }
+    .titul-content > div { margin: 1mm 0; }
+    .t-sign-block { width:100%; font-size: 9pt; }
+    .t-sign-empty { height: 11mm; }
+    .t-sign-row { display:flex; justify-content:space-between; gap:12mm; margin:1mm 0; }
     .t-sign-name { font-weight:600; white-space:nowrap; }
-    .t-rule { width:100%; border-top: 0.75pt solid #000; margin: 2mm 0 4mm; }
-    .t-org { font-size: 10pt; line-height:1.5; }
+    .t-rule { width:100%; border-top: 0.75pt solid #000; margin: 1mm 0 2mm; }
+    .t-org { font-size: 9pt; line-height:1.35; }
     .t-org-name { font-weight:600; }
-    .t-spacer { height: 12mm; }
-    .t-project { font-size: 22pt; font-weight:700; line-height:1.35; max-width: 220mm; }
-    .t-object { font-size: 14pt; line-height:1.4; }
-    .t-designation { font-size: 18pt; font-weight:700; letter-spacing:0.5pt; }
-    .t-discipline { font-size: 13pt; font-weight:700; }
-    .t-stage { font-size: 12pt; }
-    .t-city { font-size: 10pt; }
+    .t-spacer { height: 7mm; }
+    .t-project { font-size: 15pt; font-weight:700; line-height:1.25; max-width: 260mm; }
+    .t-object { font-size: 12pt; line-height:1.25; }
+    .t-designation { font-size: 16pt; font-weight:700; letter-spacing:0.5pt; }
+    .t-discipline { font-size: 11pt; font-weight:700; }
+    .t-stage { font-size: 10pt; }
+    .t-city { font-size: 9pt; }
     .no-print { position:fixed; top:10px; right:10px; z-index:10; padding:8px 16px; font-family:Arial,sans-serif; font-style:normal; font-size:14px; cursor:pointer; background:#2563eb; color:#fff; border:none; border-radius:6px; }
     @media print { body { background:#fff; } .titul-page { margin:0; } .no-print { display:none; } }
   </style>
