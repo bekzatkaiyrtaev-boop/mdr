@@ -992,27 +992,27 @@ function titulFrameHtml(v, withSignatures){
           <div>${esc(p.name_en||'')}</div>
           <div>${esc(p.name_ru||'')}</div>
         </div>
+        <div class="t-spacer"></div>
 
         ${hasObject ? `
         <div class="t-object">
           <div>${esc(v.objectEn)}</div>
           <div>${esc(v.objectRu)}</div>
-        </div>` : ''}
-
-        <div class="t-designation-group">
-          <div class="t-designation">${esc(v.designation)}</div>
-          <div class="t-discipline">${esc(v.disciplineEn)} / ${esc(v.disciplineRu)}</div>
         </div>
+        <div class="t-spacer"></div>` : ''}
 
-        <div class="t-stage-group">
-          <div class="t-stage">${esc(p.stage_en||'')} / ${esc(p.stage_ru||'')}</div>
-          ${v.volumeAlbum ? `<div class="t-vol-album">${esc(v.volumeAlbum)}</div>` : ''}
-        </div>
+        <div class="t-designation">${esc(v.designation)}</div>
+        <div class="t-discipline">${esc(v.disciplineEn)} / ${esc(v.disciplineRu)}</div>
+        <div class="t-spacer"></div>
+
+        <div class="t-stage">${esc(p.stage_en||'')} / ${esc(p.stage_ru||'')}</div>
+        ${v.volumeAlbum ? `<div class="t-vol-album">${esc(v.volumeAlbum)}</div>` : ''}
+        <div class="t-spacer"></div>
 
         ${withSignatures ? `
         <div class="t-sign-block">
-          <div class="t-sign-row"><div>Director of ${esc(p.company_name_en||'')} / Директор ${esc(p.company_name_ru||'')}</div><div class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</div></div>
-          <div class="t-sign-row"><div>Chief project engineer / Главный инженер проекта</div><div class="t-sign-name">${esc(gip)}</div></div>
+          <div class="t-sign-row"><span>Director of ${esc(p.company_name_en||'')} / Директор ${esc(p.company_name_ru||'')}</span><span class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</span></div>
+          <div class="t-sign-row"><span>Chief project engineer / Главный инженер проекта</span><span class="t-sign-name">${esc(gip)}</span></div>
         </div>` : `<div class="t-sign-block t-sign-empty"></div>`}
 
         <div class="t-city">${esc(p.city_en||'')} ${esc(year)} / г.${esc(p.city_ru||'')} ${esc(year)} г.</div>
@@ -1026,42 +1026,49 @@ function openTitulWindow(v){
   const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Титульный лист — ${esc(v.designation)}</title>
   <style>
     * { box-sizing: border-box; }
-    /* печатаем альбомно (не портретно + CSS-поворот) — поворот текста через
-       transform+position:absolute+overflow:hidden ненадёжен именно при печати/экспорте
-       в PDF (в разных браузерах часть блоков может съезжать или наезжать друг на друга).
-       Обычный, не повёрнутый flex-ряд на альбомной странице печатается без сюрпризов —
-       после печати достаточно повернуть сам лист на 90° при подшивке в альбом */
-    @page { size: A4 landscape; margin: 0; }
+    @page { size: A4 portrait; margin: 0; }
     body {
       margin: 0; color:#000; background:#ccc;
       font-family: 'ISOCPEUR', 'ISOCP', 'GOST type A', Consolas, 'Courier New', monospace;
       font-style: italic;
     }
-    .titul-page { width: 297mm; height: 210mm; padding: 8mm; background:#fff; margin: 0 auto 8mm auto; page-break-after: always; }
+    .titul-page { width: 210mm; height: 297mm; padding: 8mm; background:#fff; margin: 0 auto 8mm auto; page-break-after: always; }
     .titul-page:last-of-type { page-break-after: auto; }
-    .titul-frame { width: 100%; height: 100%; border: 1.5pt solid #000; }
-    .titul-content {
-      width: 100%; height: 100%;
-      display: flex; flex-direction: row; align-items: center; text-align: center;
-      padding: 0 4mm;
+    /* центрируем повёрнутый блок через flex вместо position:absolute+translate(-50%,-50%) —
+       та комбинация ненадёжно вела себя именно при печати/экспорте в PDF (часть строк могла
+       съехать в угол или наехать друг на друга), хотя на экране выглядела нормально */
+    .titul-frame {
+      width: 100%; height: 100%; border: 1.5pt solid #000;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
     }
-    .titul-content > div { margin: 0 2mm; flex: 1 1 0; min-width: 0; }
-    .t-sign-block { font-size: 9pt; flex: 1.3 1 0; }
-    .t-sign-empty { flex: 0.6 1 0; }
-    .t-sign-row { margin: 2mm 0; }
-    .t-sign-name { font-weight:600; }
-    .t-rule { border-top: 0.75pt solid #000; margin: 2mm 0; }
-    .t-org { font-size: 10pt; line-height:1.35; }
+    .titul-content {
+      width: 277mm;
+      transform: rotate(-90deg);
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      padding: 0 2mm;
+      flex-shrink: 0;
+    }
+    .titul-content > div { margin: 1mm 0; }
+    /* шапка (организация + линия) — прижата к одному краю листа, город/год — к другому;
+       остальной контент остаётся по центру между ними (см. align-self ниже) */
+    .t-header { align-self: flex-end; width:100%; }
+    .t-city { align-self: flex-start; width:100%; }
+    .t-sign-block { width:100%; font-size: 10pt; }
+    .t-sign-empty { height: 12mm; }
+    .t-sign-row { display:flex; justify-content:space-between; gap:12mm; margin:1mm 0; }
+    .t-sign-name { font-weight:600; white-space:nowrap; }
+    .t-rule { width:100%; border-top: 0.75pt solid #000; margin: 1mm 0 2mm; }
+    .t-org { font-size: 11pt; line-height:1.35; }
     .t-org-name { font-weight:600; }
-    .t-project { font-size: 13pt; font-weight:700; line-height:1.3; flex: 3.2 1 0; }
-    .t-object { font-size: 12pt; line-height:1.3; flex: 1.5 1 0; }
-    .t-designation-group { flex: 1.3 1 0; }
-    .t-designation { font-size: 22pt; font-weight:700; letter-spacing:0.5pt; }
-    .t-discipline { font-size: 11pt; font-weight:700; margin-top: 2mm; }
-    .t-stage-group { flex: 1.3 1 0; }
-    .t-stage { font-size: 10pt; }
-    .t-vol-album { font-size: 10pt; margin-top: 2mm; }
-    .t-city { font-size: 10pt; flex: 0.8 1 0; }
+    .t-spacer { height: 8mm; }
+    .t-project { font-size: 18pt; font-weight:700; line-height:1.25; max-width: 260mm; }
+    .t-object { font-size: 14pt; line-height:1.25; }
+    .t-designation { font-size: 30pt; font-weight:700; letter-spacing:0.5pt; }
+    .t-discipline { font-size: 13pt; font-weight:700; }
+    .t-stage { font-size: 12pt; }
+    .t-vol-album { font-size: 11pt; }
+    .t-city { font-size: 11pt; }
     .no-print { position:fixed; top:10px; right:10px; z-index:10; padding:8px 16px; font-family:Arial,sans-serif; font-style:normal; font-size:14px; cursor:pointer; background:#2563eb; color:#fff; border:none; border-radius:6px; }
     @media print { body { background:#fff; } .titul-page { margin:0; } .no-print { display:none; } }
   </style>
