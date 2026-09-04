@@ -142,6 +142,8 @@ create table public.projects (
   license_number text,        -- "ГСЛ №..."
   director_name_ru text,
   director_name_en text,
+  gip_name_ru text,            -- ФИО ГИПа для титула — если не заполнено, подставляется
+  gip_name_en text,            -- автоматически (см. "Пользователи" — роль ГИП/справочник employees)
   city_ru text,
   city_en text,
   stage_ru text,               -- стадия проектной документации, напр. "Рабочая документация"

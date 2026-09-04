@@ -319,6 +319,8 @@ function renderProjectTab(){
         <div class="field"><label>№ ГСЛ</label><input type="text" id="pLicense" value="${esc(project?.license_number)}" placeholder="напр. №2402977"></div>
         <div class="field lang-ru"><label>Директор — ФИО (RU)</label><input type="text" id="pDirectorRu" value="${esc(project?.director_name_ru)}"></div>
         <div class="field lang-en"><label>Директор — ФИО (EN)</label><input type="text" id="pDirectorEn" value="${esc(project?.director_name_en)}"></div>
+        <div class="field lang-ru"><label>ГИП — ФИО (RU)</label><input type="text" id="pGipRu" value="${esc(project?.gip_name_ru)}" placeholder="если пусто — подставится автоматически"></div>
+        <div class="field lang-en"><label>ГИП — ФИО (EN)</label><input type="text" id="pGipEn" value="${esc(project?.gip_name_en)}"></div>
         <div class="field lang-ru"><label>Город (RU)</label><input type="text" id="pCityRu" value="${esc(project?.city_ru)}" placeholder="напр. Астана"></div>
         <div class="field lang-en"><label>Город (EN)</label><input type="text" id="pCityEn" value="${esc(project?.city_en)}" placeholder="напр. Astana"></div>
         <div class="field lang-ru"><label>Стадия (RU)</label><input type="text" id="pStageRu" value="${esc(project?.stage_ru)}" placeholder="напр. Рабочая документация"></div>
@@ -960,20 +962,27 @@ function renderSheetCompTab(){
 }
 
 // ---------------- титульный лист альбома (2 страницы, печать через window.print()) ----------------
-// ФИО ГИПа берём из зарегистрированных profiles (роль gip или закреплённый администратор);
-// если ГИП ещё не зарегистрировался — пробуем справочник employees (см. "Пользователи")
-function projectGipName(){
+// ФИО ГИПа для титула — в первую очередь берём то, что явно вписано в реквизиты проекта
+// ("Проект" -> "Реквизиты для титульного листа"); если там пусто — подставляем автоматически
+// из зарегистрированных profiles (роль gip или закреплённый администратор), а если ГИП ещё
+// не зарегистрировался — пробуем справочник employees (см. "Пользователи")
+function projectGipNames(){
+  const ru = (project?.gip_name_ru || '').trim();
+  const en = (project?.gip_name_en || '').trim();
+  if (ru || en) return { ru, en };
   const fromProfiles = allProfiles.find(p => p.role === 'gip' || isAdminEmail(p.email));
-  if (fromProfiles) return (fromProfiles.full_name || fromProfiles.email || '').trim();
-  const fromEmployees = employees.find(e => e.role === 'gip');
-  return fromEmployees ? (fromEmployees.full_name || '').trim() : '';
+  const auto = fromProfiles
+    ? (fromProfiles.full_name || fromProfiles.email || '').trim()
+    : (employees.find(e => e.role === 'gip')?.full_name || '').trim();
+  return { ru: auto, en: '' };
 }
 // один "лист" титула — рамка А4 с повёрнутым на 90° содержимым (как в переплетённом альбоме);
 // withSignatures=false — первая страница (пустое место под подпись), true — вторая (со ФИО)
 function titulFrameHtml(v, withSignatures){
   const p = project || {};
   const year = (p.contract_year || '').trim() || new Date().getFullYear();
-  const gip = projectGipName();
+  const gipNames = projectGipNames();
+  const gip = [gipNames.en, gipNames.ru].filter(Boolean).join(' / ');
   const hasObject = !!(v.objectRu || v.objectEn);
   return `
   <div class="titul-page">
@@ -1036,7 +1045,7 @@ function openTitulWindow(v){
          PT Sans Narrow — свободный веб-шрифт, разработанный под кириллицу и ГОСТ-документы,
          ближе всего по рисунку к чертёжному шрифту среди гарантированно доступных в браузере */
       font-family: 'ISOCPEUR', 'ISOCP', 'GOST type A', 'PT Sans Narrow', Arial, sans-serif;
-      font-style: normal;
+      font-style: italic;
     }
     .titul-page { width: 210mm; height: 297mm; padding: 8mm; background:#fff; margin: 0 auto 8mm auto; page-break-after: always; }
     .titul-page:last-of-type { page-break-after: auto; }
@@ -1050,16 +1059,21 @@ function openTitulWindow(v){
     }
     .titul-content {
       width: 277mm;
+      /* задаёт итоговую "длину" повёрнутого блока — без явной высоты содержимое (уже
+         center'ится через .titul-frame) занимало только свой intrinsic-размер и оставляло
+         большие пустые поля по краям листа вместо того, чтобы раздвигать шапку/город к краям */
+      height: 174mm;
       transform: rotate(-90deg);
       display: flex; flex-direction: column; align-items: center; text-align: center;
       padding: 0 2mm;
       flex-shrink: 0;
     }
     .titul-content > div { margin: 1mm 0; }
-    /* шапка (организация + линия) — прижата к одному краю листа, город/год — к другому;
-       остальной контент остаётся по центру между ними (см. align-self ниже) */
-    .t-header { align-self: flex-end; width:100%; }
-    .t-city { align-self: flex-start; width:100%; }
+    /* шапка (организация + линия) — прижата к одному краю листа; город/год — к другому,
+       margin-top:auto прижимает его к концу (теперь явно заданной) высоты .titul-content,
+       весь остальной контент остаётся по месту между ними */
+    .t-header { width:100%; }
+    .titul-content > .t-city { width:100%; margin-top:auto; }
     .t-sign-block { width:100%; font-size: 10pt; }
     .t-sign-empty { height: 12mm; }
     .t-sign-row { display:flex; justify-content:space-between; gap:12mm; margin:1mm 0; }
@@ -2056,6 +2070,8 @@ function bindTabEvents(id){
         license_number: document.getElementById('pLicense').value.trim() || null,
         director_name_ru: document.getElementById('pDirectorRu').value.trim() || null,
         director_name_en: document.getElementById('pDirectorEn').value.trim() || null,
+        gip_name_ru: document.getElementById('pGipRu').value.trim() || null,
+        gip_name_en: document.getElementById('pGipEn').value.trim() || null,
         city_ru: document.getElementById('pCityRu').value.trim() || null,
         city_en: document.getElementById('pCityEn').value.trim() || null,
         stage_ru: document.getElementById('pStageRu').value.trim() || null,
