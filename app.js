@@ -992,22 +992,22 @@ function titulFrameHtml(v, withSignatures){
           <div>${esc(p.name_en||'')}</div>
           <div>${esc(p.name_ru||'')}</div>
         </div>
-        <div class="t-spacer"></div>
 
         ${hasObject ? `
         <div class="t-object">
           <div>${esc(v.objectEn)}</div>
           <div>${esc(v.objectRu)}</div>
+        </div>` : ''}
+
+        <div class="t-designation-group">
+          <div class="t-designation">${esc(v.designation)}</div>
+          <div class="t-discipline">${esc(v.disciplineEn)} / ${esc(v.disciplineRu)}</div>
         </div>
-        <div class="t-spacer"></div>` : ''}
 
-        <div class="t-designation">${esc(v.designation)}</div>
-        <div class="t-discipline">${esc(v.disciplineEn)} / ${esc(v.disciplineRu)}</div>
-        <div class="t-spacer"></div>
-
-        <div class="t-stage">${esc(p.stage_en||'')} / ${esc(p.stage_ru||'')}</div>
-        ${v.volumeAlbum ? `<div class="t-vol-album">${esc(v.volumeAlbum)}</div>` : ''}
-        <div class="t-spacer"></div>
+        <div class="t-stage-group">
+          <div class="t-stage">${esc(p.stage_en||'')} / ${esc(p.stage_ru||'')}</div>
+          ${v.volumeAlbum ? `<div class="t-vol-album">${esc(v.volumeAlbum)}</div>` : ''}
+        </div>
 
         ${withSignatures ? `
         <div class="t-sign-block">
@@ -1046,21 +1046,22 @@ function openTitulWindow(v){
       padding: 0 4mm;
     }
     .titul-content > div { margin: 0 2mm; flex: 1 1 0; min-width: 0; }
-    .t-sign-block { font-size: 9pt; }
+    .t-sign-block { font-size: 9pt; flex: 1.3 1 0; }
     .t-sign-empty { flex: 0.6 1 0; }
-    .t-sign-row { margin: 1mm 0; }
+    .t-sign-row { margin: 2mm 0; }
     .t-sign-name { font-weight:600; }
     .t-rule { border-top: 0.75pt solid #000; margin: 2mm 0; }
     .t-org { font-size: 10pt; line-height:1.35; }
     .t-org-name { font-weight:600; }
-    .t-spacer { flex: 0.3 1 0; margin: 0; }
-    .t-project { font-size: 15pt; font-weight:700; line-height:1.25; flex: 1.4 1 0; }
-    .t-object { font-size: 12pt; line-height:1.25; }
+    .t-project { font-size: 13pt; font-weight:700; line-height:1.3; flex: 3.2 1 0; }
+    .t-object { font-size: 12pt; line-height:1.3; flex: 1.5 1 0; }
+    .t-designation-group { flex: 1.3 1 0; }
     .t-designation { font-size: 22pt; font-weight:700; letter-spacing:0.5pt; }
-    .t-discipline { font-size: 11pt; font-weight:700; }
+    .t-discipline { font-size: 11pt; font-weight:700; margin-top: 2mm; }
+    .t-stage-group { flex: 1.3 1 0; }
     .t-stage { font-size: 10pt; }
-    .t-vol-album { font-size: 10pt; }
-    .t-city { font-size: 10pt; flex: 0.7 1 0; }
+    .t-vol-album { font-size: 10pt; margin-top: 2mm; }
+    .t-city { font-size: 10pt; flex: 0.8 1 0; }
     .no-print { position:fixed; top:10px; right:10px; z-index:10; padding:8px 16px; font-family:Arial,sans-serif; font-style:normal; font-size:14px; cursor:pointer; background:#2563eb; color:#fff; border:none; border-radius:6px; }
     @media print { body { background:#fff; } .titul-page { margin:0; } .no-print { display:none; } }
   </style>
