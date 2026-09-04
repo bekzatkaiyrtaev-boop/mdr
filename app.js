@@ -1007,6 +1007,7 @@ function titulFrameHtml(v, withSignatures){
 
         <div class="t-stage">${esc(p.stage_en||'')} / ${esc(p.stage_ru||'')}</div>
         ${v.volumeAlbum ? `<div class="t-vol-album">${esc(v.volumeAlbum)}</div>` : ''}
+        <div class="t-spacer"></div>
 
         ${withSignatures ? `
         <div class="t-sign-block">
@@ -1038,7 +1039,7 @@ function openTitulWindow(v){
       position: absolute; top: 50%; left: 50%; width: 277mm;
       transform: translate(-50%, -50%) rotate(-90deg);
       display: flex; flex-direction: column; align-items: center; text-align: center;
-      padding: 0 6mm;
+      padding: 0 2mm;
     }
     .titul-content > div { margin: 1mm 0; }
     /* шапка (организация + линия) — прижата к одному краю листа, город/год — к другому;
