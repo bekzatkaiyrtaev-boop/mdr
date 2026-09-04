@@ -283,10 +283,11 @@ function resolvedResponsibleName(pd, d){
 }
 // "Ответственный" за конкретный альбом в позиции: по умолчанию — исполнитель №1 из
 // "Разделы и исполнители"; если исполнителей 2+ — выпадающий список для выбора среди них
-function responsibleCellHtml(pd, d){
+function responsibleCellHtml(pd, d, canEdit = true){
   const assignees = d ? assigneesFor(d.id) : [];
   const names = assignees.map(a => employeeName(a.employee_id).trim()).filter(Boolean);
   const current = resolvedResponsibleName(pd, d);
+  if (!canEdit) return esc(current);
   if (names.length >= 2){
     const matched = names.includes(current);
     const optionsHtml = names.map(n => `<option value="${esc(n)}" ${n===current?'selected':''}>${esc(n)}</option>`).join('')
@@ -421,12 +422,13 @@ function renderStandaloneVolumeDetail(){
   if (!v) return '';
   const discs = disciplinesForVolumeAll(v.id);
   const orderNumbers = sectionOrderNumbersForVolume(v.id);
+  const editableAll = isFullAccess();
   return `
   <div class="card">
     <div class="card-header">
       <span class="title">${esc(v.number?v.number+' ':'')}${esc(t(v.name_ru,v.name_en)||'(без названия)')} — разделы</span>
       <div style="display:flex;gap:8px;">
-        <button class="btn secondary small" id="btnAddAllStandaloneSections" title="Добавить сразу все разделы из «Разделы и исполнители», которых ещё нет в этом томе — лишние потом можно удалить">+ Добавить все разделы</button>
+        ${editableAll ? `<button class="btn secondary small" id="btnAddAllStandaloneSections" title="Добавить сразу все разделы из «Разделы и исполнители», которых ещё нет в этом томе — лишние потом можно удалить">+ Добавить все разделы</button>` : ''}
         <button class="btn small" id="btnAddStandaloneSection">+ Добавить раздел</button>
       </div>
     </div>
@@ -438,21 +440,30 @@ function renderStandaloneVolumeDetail(){
           const pinned = !!pd.pinned;
           const sibUpPinned = idx > 0 && discs[idx-1].pd.pinned;
           const sibDownPinned = idx < discs.length-1 && discs[idx+1].pd.pinned;
+          const canEditRow = editableAll || canEditDiscipline(pd.discipline_code);
+          // сосед может принадлежать чужому разделу — тогда обмен sort_order с ним инженеру
+          // запрещён на уровне RLS, поэтому стрелку в его сторону тоже блокируем в UI
+          const sibUpForeign = !editableAll && idx > 0 && !canEditDiscipline(discs[idx-1].pd.discipline_code);
+          const sibDownForeign = !editableAll && idx < discs.length-1 && !canEditDiscipline(discs[idx+1].pd.discipline_code);
           return `
           <tr class="sec-disc-row-vol" data-pdid="${pd.id}" data-vol="${v.id}">
             <td style="font-family:var(--mono);font-weight:600;color:#fff;" title="Считается автоматически: номер тома.порядковый номер раздела">${esc(orderNumbers[pd.id] || '')}</td>
             <td>
+              ${editableAll ? `
               <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="раздел не выбран — введите или выберите" title="Введите точное название раздела из списка, чтобы привязать к нему, или совсем новое — чтобы создать новый" style="display:block;width:100%;">
               <input type="text" class="text-like mAlbumNameEn lang-en" data-pdid="${pd.id}" value="${esc(d ? (d.name_en||'') : '')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;color:var(--muted);">
+              ` : `${(d && (d.name_ru || d.name_en)) ? esc(t(d.name_ru, d.name_en)) : `<span style="opacity:.6;">раздел не выбран</span>`}`}
             </td>
-            <td><input type="text" class="text-like mAlbumMarker" data-pdid="${pd.id}" value="${esc(pd.marker || defaultMarkerForVolumeAlbum(v.id, pd.id))}" placeholder="шифр" style="width:100%;font-weight:600;"></td>
-            <td>${responsibleCellHtml(pd, d)}</td>
+            <td><input type="text" class="text-like mAlbumMarker" data-pdid="${pd.id}" value="${esc(pd.marker || defaultMarkerForVolumeAlbum(v.id, pd.id))}" placeholder="шифр" ${canEditRow?'':'disabled'} style="width:100%;font-weight:600;"></td>
+            <td>${responsibleCellHtml(pd, d, canEditRow)}</td>
             <td style="white-space:nowrap;">
-              <button class="icon-btn btn-move-disc-vol" data-pdid="${pd.id}" data-vol="${v.id}" data-dir="up" ${(idx<=0||pinned||sibUpPinned)?'disabled':''}>↑</button>
-              <button class="icon-btn btn-move-disc-vol" data-pdid="${pd.id}" data-vol="${v.id}" data-dir="down" ${(idx>=discs.length-1||pinned||sibDownPinned)?'disabled':''}>↓</button>
+              ${canEditRow ? `
+              <button class="icon-btn btn-move-disc-vol" data-pdid="${pd.id}" data-vol="${v.id}" data-dir="up" ${(idx<=0||pinned||sibUpPinned||sibUpForeign)?'disabled':''}>↑</button>
+              <button class="icon-btn btn-move-disc-vol" data-pdid="${pd.id}" data-vol="${v.id}" data-dir="down" ${(idx>=discs.length-1||pinned||sibDownPinned||sibDownForeign)?'disabled':''}>↓</button>
               <button class="icon-btn btn-pin-disc ${pinned?'pinned':''}" data-pdid="${pd.id}" title="${pinned?'Открепить строку':'Закрепить строку (запретить сдвиг)'}">⚓</button>
+              ` : ''}
             </td>
-            <td><button class="icon-btn btn-del-mdr-disc" data-pdid="${pd.id}" title="Удалить раздел">✕</button></td>
+            <td>${canEditRow ? `<button class="icon-btn btn-del-mdr-disc" data-pdid="${pd.id}" title="Удалить раздел">✕</button>` : ''}</td>
           </tr>`;
         }).join('') || `<tr><td colspan="6" class="muted">Разделы пока не добавлены — нажмите «+ Добавить раздел»</td></tr>`}
       </table>
@@ -565,12 +576,13 @@ function renderSectionsDetail(){
   if (!p) return '';
   const discs = disciplinesForPositionAll(p.id);
   const orderNumbers = sectionOrderNumbers(p.id);
+  const editableAll = isFullAccess();
   return `
   <div class="card">
     <div class="card-header">
       <span class="title">${esc(positionLabel(p))} — разделы</span>
       <div style="display:flex;gap:8px;">
-        <button class="btn secondary small" id="btnAddAllSections" title="Добавить сразу все разделы из «Разделы и исполнители», которых ещё нет в этой позиции — лишние потом можно удалить">+ Добавить все разделы</button>
+        ${editableAll ? `<button class="btn secondary small" id="btnAddAllSections" title="Добавить сразу все разделы из «Разделы и исполнители», которых ещё нет в этой позиции — лишние потом можно удалить">+ Добавить все разделы</button>` : ''}
         <button class="btn small" id="btnAddSection">+ Добавить раздел</button>
       </div>
     </div>
@@ -582,21 +594,30 @@ function renderSectionsDetail(){
           const pinned = !!pd.pinned;
           const sibUpPinned = idx > 0 && discs[idx-1].pd.pinned;
           const sibDownPinned = idx < discs.length-1 && discs[idx+1].pd.pinned;
+          const canEditRow = editableAll || canEditDiscipline(pd.discipline_code);
+          // сосед может принадлежать чужому разделу — тогда обмен sort_order с ним инженеру
+          // запрещён на уровне RLS, поэтому стрелку в его сторону тоже блокируем в UI
+          const sibUpForeign = !editableAll && idx > 0 && !canEditDiscipline(discs[idx-1].pd.discipline_code);
+          const sibDownForeign = !editableAll && idx < discs.length-1 && !canEditDiscipline(discs[idx+1].pd.discipline_code);
           return `
           <tr class="sec-disc-row" data-pdid="${pd.id}" data-pos="${p.id}">
             <td style="font-family:var(--mono);font-weight:600;color:#fff;" title="Считается автоматически: номер позиции.порядковый номер раздела">${esc(orderNumbers[pd.id] || '')}</td>
             <td>
+              ${editableAll ? `
               <input type="text" class="text-like mAlbumNameRu lang-ru" data-pdid="${pd.id}" list="disciplineNameSuggestions" value="${esc(d ? (d.name_ru||'') : '')}" placeholder="раздел не выбран — введите или выберите" title="Введите точное название раздела из списка, чтобы привязать к нему, или совсем новое — чтобы создать новый" style="display:block;width:100%;">
               <input type="text" class="text-like mAlbumNameEn lang-en" data-pdid="${pd.id}" value="${esc(d ? (d.name_en||'') : '')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;color:var(--muted);">
+              ` : `${(d && (d.name_ru || d.name_en)) ? esc(t(d.name_ru, d.name_en)) : `<span style="opacity:.6;">раздел не выбран</span>`}`}
             </td>
-            <td><input type="text" class="text-like mAlbumMarker" data-pdid="${pd.id}" value="${esc(pd.marker || defaultMarkerForAlbum(p.id, pd.id))}" placeholder="шифр" style="width:100%;font-weight:600;"></td>
-            <td>${responsibleCellHtml(pd, d)}</td>
+            <td><input type="text" class="text-like mAlbumMarker" data-pdid="${pd.id}" value="${esc(pd.marker || defaultMarkerForAlbum(p.id, pd.id))}" placeholder="шифр" ${canEditRow?'':'disabled'} style="width:100%;font-weight:600;"></td>
+            <td>${responsibleCellHtml(pd, d, canEditRow)}</td>
             <td style="white-space:nowrap;">
-              <button class="icon-btn btn-move-disc" data-pdid="${pd.id}" data-pos="${p.id}" data-dir="up" ${(idx<=0||pinned||sibUpPinned)?'disabled':''}>↑</button>
-              <button class="icon-btn btn-move-disc" data-pdid="${pd.id}" data-pos="${p.id}" data-dir="down" ${(idx>=discs.length-1||pinned||sibDownPinned)?'disabled':''}>↓</button>
+              ${canEditRow ? `
+              <button class="icon-btn btn-move-disc" data-pdid="${pd.id}" data-pos="${p.id}" data-dir="up" ${(idx<=0||pinned||sibUpPinned||sibUpForeign)?'disabled':''}>↑</button>
+              <button class="icon-btn btn-move-disc" data-pdid="${pd.id}" data-pos="${p.id}" data-dir="down" ${(idx>=discs.length-1||pinned||sibDownPinned||sibDownForeign)?'disabled':''}>↓</button>
               <button class="icon-btn btn-pin-disc ${pinned?'pinned':''}" data-pdid="${pd.id}" title="${pinned?'Открепить строку':'Закрепить строку (запретить сдвиг)'}">⚓</button>
+              ` : ''}
             </td>
-            <td><button class="icon-btn btn-del-mdr-disc" data-pdid="${pd.id}" title="Удалить раздел">✕</button></td>
+            <td>${canEditRow ? `<button class="icon-btn btn-del-mdr-disc" data-pdid="${pd.id}" title="Удалить раздел">✕</button>` : ''}</td>
           </tr>`;
         }).join('') || `<tr><td colspan="6" class="muted">Разделы пока не добавлены — нажмите «+ Добавить раздел»</td></tr>`}
       </table>
@@ -712,17 +733,33 @@ function bindAlbumEditEvents(){
 }
 function bindSectionsDetailEvents(){
   const btnAdd = document.getElementById('btnAddSection');
-  if (btnAdd) btnAdd.addEventListener('click', async () => {
+  if (btnAdd) btnAdd.addEventListener('click', async (e) => {
     const pos = positions.find(x => x.id === sectionsPositionId);
     if (!pos) return;
-    const tempCode = '_new' + Date.now().toString(36) + Math.floor(Math.random()*1000);
     const existing = positionDisciplines.filter(pd => pd.position_id === pos.id);
     const nextOrder = existing.length ? Math.max(...existing.map(pd => pd.sort_order)) + 1 : 0;
-    await dbWrite(sb.from('position_disciplines').insert({ position_id: pos.id, discipline_code: tempCode, sort_order: nextOrder, created_by: profile.id }));
-    const { data } = await sb.from('position_disciplines').select('*');
-    positionDisciplines = data || [];
-    document.getElementById('sectionsDetail').innerHTML = renderSectionsDetail();
-    bindSectionsDetailEvents();
+    if (isFullAccess()){
+      const tempCode = '_new' + Date.now().toString(36) + Math.floor(Math.random()*1000);
+      await dbWrite(sb.from('position_disciplines').insert({ position_id: pos.id, discipline_code: tempCode, sort_order: nextOrder, created_by: profile.id }));
+      const { data } = await sb.from('position_disciplines').select('*');
+      positionDisciplines = data || [];
+      document.getElementById('sectionsDetail').innerHTML = renderSectionsDetail();
+      bindSectionsDetailEvents();
+      return;
+    }
+    // инженер — раздел выбирается из своих (где он исполнитель в "Проект"), а не вводится текстом
+    const list = myDisciplines().filter(d => d.code && d.name_ru);
+    if (!list.length) return alert('Вам не назначены разделы — их назначает ГИП во вкладке «Проект» → «Разделы и исполнители».');
+    showContextMenu(e.clientX, e.clientY, list.map(d => ({
+      label: `${d.code} — ${d.name_ru}`,
+      onClick: async () => {
+        await dbWrite(sb.from('position_disciplines').insert({ position_id: pos.id, discipline_code: d.code, sort_order: nextOrder, created_by: profile.id }));
+        const { data } = await sb.from('position_disciplines').select('*');
+        positionDisciplines = data || [];
+        document.getElementById('sectionsDetail').innerHTML = renderSectionsDetail();
+        bindSectionsDetailEvents();
+      },
+    })));
   });
 
   const btnAddAll = document.getElementById('btnAddAllSections');
@@ -744,8 +781,9 @@ function bindSectionsDetailEvents(){
 
   bindAlbumEditEvents();
 
-  // правая кнопка мыши — как в Excel: "Добавить строку выше/ниже"
-  document.querySelectorAll('tr.sec-disc-row').forEach(tr => tr.addEventListener('contextmenu', (e) => {
+  // правая кнопка мыши — как в Excel: "Добавить строку выше/ниже" (доступно только ГИП/помощнику
+  // ГИПа — у инженера раздел выбирается из своих через кнопку "+ Добавить раздел" выше)
+  if (isFullAccess()) document.querySelectorAll('tr.sec-disc-row').forEach(tr => tr.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const posId = tr.dataset.pos;
     const pdId = tr.dataset.pdid;
@@ -759,17 +797,33 @@ function bindSectionsDetailEvents(){
 // только владелец альбома — том (volume_id), а не позиция
 function bindStandaloneVolumeDetailEvents(){
   const btnAdd = document.getElementById('btnAddStandaloneSection');
-  if (btnAdd) btnAdd.addEventListener('click', async () => {
+  if (btnAdd) btnAdd.addEventListener('click', async (e) => {
     const vol = volumes.find(x => x.id === standaloneVolumeId);
     if (!vol) return;
-    const tempCode = '_new' + Date.now().toString(36) + Math.floor(Math.random()*1000);
     const existing = positionDisciplines.filter(pd => pd.volume_id === vol.id);
     const nextOrder = existing.length ? Math.max(...existing.map(pd => pd.sort_order)) + 1 : 0;
-    await dbWrite(sb.from('position_disciplines').insert({ volume_id: vol.id, discipline_code: tempCode, sort_order: nextOrder, created_by: profile.id }));
-    const { data } = await sb.from('position_disciplines').select('*');
-    positionDisciplines = data || [];
-    document.getElementById('standaloneVolumeDetail').innerHTML = renderStandaloneVolumeDetail();
-    bindStandaloneVolumeDetailEvents();
+    if (isFullAccess()){
+      const tempCode = '_new' + Date.now().toString(36) + Math.floor(Math.random()*1000);
+      await dbWrite(sb.from('position_disciplines').insert({ volume_id: vol.id, discipline_code: tempCode, sort_order: nextOrder, created_by: profile.id }));
+      const { data } = await sb.from('position_disciplines').select('*');
+      positionDisciplines = data || [];
+      document.getElementById('standaloneVolumeDetail').innerHTML = renderStandaloneVolumeDetail();
+      bindStandaloneVolumeDetailEvents();
+      return;
+    }
+    // инженер — раздел выбирается из своих (где он исполнитель в "Проект"), а не вводится текстом
+    const list = myDisciplines().filter(d => d.code && d.name_ru);
+    if (!list.length) return alert('Вам не назначены разделы — их назначает ГИП во вкладке «Проект» → «Разделы и исполнители».');
+    showContextMenu(e.clientX, e.clientY, list.map(d => ({
+      label: `${d.code} — ${d.name_ru}`,
+      onClick: async () => {
+        await dbWrite(sb.from('position_disciplines').insert({ volume_id: vol.id, discipline_code: d.code, sort_order: nextOrder, created_by: profile.id }));
+        const { data } = await sb.from('position_disciplines').select('*');
+        positionDisciplines = data || [];
+        document.getElementById('standaloneVolumeDetail').innerHTML = renderStandaloneVolumeDetail();
+        bindStandaloneVolumeDetailEvents();
+      },
+    })));
   });
 
   const btnAddAll = document.getElementById('btnAddAllStandaloneSections');
@@ -806,8 +860,9 @@ function bindStandaloneVolumeDetailEvents(){
     bindStandaloneVolumeDetailEvents();
   }));
 
-  // правая кнопка мыши — как в Excel: "Добавить строку выше/ниже"
-  document.querySelectorAll('tr.sec-disc-row-vol').forEach(tr => tr.addEventListener('contextmenu', (e) => {
+  // правая кнопка мыши — как в Excel: "Добавить строку выше/ниже" (доступно только ГИП/помощнику
+  // ГИПа — у инженера раздел выбирается из своих через кнопку "+ Добавить раздел" выше)
+  if (isFullAccess()) document.querySelectorAll('tr.sec-disc-row-vol').forEach(tr => tr.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const volId = tr.dataset.vol;
     const pdId = tr.dataset.pdid;
@@ -1065,6 +1120,12 @@ function myDisciplineCodes(){
   const myDisciplineIds = new Set(disciplineAssignees.filter(a => myEmployeeIds.has(a.employee_id)).map(a => a.discipline_id));
   return disciplines.filter(d => myDisciplineIds.has(d.id)).map(d => d.code);
 }
+// разделы (из "Проект" → "Разделы и исполнители"), где текущий пользователь — исполнитель;
+// используется, чтобы инженеру в "Создание разделов" предлагались только его разделы
+function myDisciplines(){
+  const codes = new Set(myDisciplineCodes());
+  return sortedDisciplines().filter(d => codes.has(d.code));
+}
 function canEditDiscipline(code){
   if (isFullAccess()) return true;
   return myDisciplineCodes().includes(code);
@@ -1225,10 +1286,12 @@ async function insertAlbumAdjacentVolume(volumeId, targetPdId, dir){
   positionDisciplines = data || [];
   renderTab(activeTab);
 }
-// два независимых фильтра строк MDR (клик по заголовкам "Номер тома" / "№ по ГП"),
-// плюс ручные ▼/▶ на отдельных строках — те продолжают работать независимо от фильтров
-let mdrVolumesOnly = false;      // "Номер тома" — показывать только строки томов
-let mdrFilterPositionId = '';    // "№ по ГП" — показывать только эту позицию (+ её разделы/листы)
+// три независимых (взаимоисключающих) фильтра строк MDR — по клику на заголовки
+// "Номер тома" / "№ по ГП" / "Обозначение", плюс ручные ▼/▶ на отдельных строках,
+// которые продолжают работать независимо от этих фильтров
+let mdrVolumesOnly = false;         // "Номер тома" — показывать только строки томов
+let mdrFilterPositionId = '';       // "№ по ГП" — показывать только эту позицию (+ её разделы/листы)
+let mdrFilterDisciplineCode = '';   // "Обозначение" — показывать только этот раздел (+ его листы), в любых позициях/томах
 function resetMdrRowToggles(){
   document.querySelectorAll('.mdr-toggle').forEach(b => b.textContent = '▼');
 }
@@ -1245,20 +1308,14 @@ function applyMdrRowFilters(){
     });
     return;
   }
+  if (mdrFilterDisciplineCode){
+    document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row').forEach(tr => tr.style.display = 'none');
+    document.querySelectorAll('tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => {
+      tr.style.display = tr.dataset.code === mdrFilterDisciplineCode ? '' : 'none';
+    });
+    return;
+  }
   document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = '');
-}
-// "Редакция" листа — своё отдельное поле (sheets.edition), задаётся прямо в MDR; выпадающий
-// список стандартных обозначений. Не путать с "Ревизией" (sheets.revision) — та берётся
-// только из вкладки "Состав разделов" и в MDR просто показывается, не редактируется
-const MDR_EDITION_OPTIONS = ['R01','R02','A1','A2','A3'];
-function mdrEditionSelectHtml(s){
-  const current = s.edition || '';
-  const matched = MDR_EDITION_OPTIONS.includes(current);
-  return `<select class="text-like sMdrEdition" data-id="${s.id}" style="width:100%;">
-    <option value=""></option>
-    ${MDR_EDITION_OPTIONS.map(r => `<option value="${r}" ${current===r?'selected':''}>${r}</option>`).join('')}
-    ${(!matched && current) ? `<option value="${esc(current)}" selected>${esc(current)}</option>` : ''}
-  </select>`;
 }
 // строки альбомов + их листов для MDR — общая логика для альбомов внутри позиции
 // (owner = {pos:id}) и альбомов, стоящих прямо в "Отдельном томе" (owner = {vol:id})
@@ -1273,7 +1330,7 @@ function discSheetRowsHtml(discs, owner){
     const responsibleName = resolvedResponsibleName(pd, d);
     const sheetRows = sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id));
     rows.push(`
-      <tr class="mdr-disc-row" ${ownerAttr} data-pdid="${pd.id}">
+      <tr class="mdr-disc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}">
         <td><input type="text" class="text-like mAlbumManualNum" data-pdid="${pd.id}" value="${esc(pd.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td>
           <button class="mdr-toggle btn-toggle-disc" data-pdid="${pd.id}">▼</button>
@@ -1285,18 +1342,16 @@ function discSheetRowsHtml(discs, owner){
         <td>${esc(pd.note||'')}</td>
         <td title="Ответственный задаётся во вкладке «Создание разделов»">${esc(responsibleName)}</td>
         <td></td>
-        <td></td>
       </tr>`);
     sheetRows.forEach((s) => {
       rows.push(`
-      <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}">
+      <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}">
         <td><input type="text" class="text-like sManualNum" data-id="${s.id}" value="${esc(s.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td></td>
         <td colspan="2" style="padding-left:80px;">${esc(t(s.name_ru, s.name_en) || '—')}</td>
         <td>${esc(s.comment||'')}</td>
         <td></td>
         <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.revision||'')}</td>
-        <td>${mdrEditionSelectHtml(s)}</td>
       </tr>`);
     });
   });
@@ -1313,13 +1368,13 @@ function discSheetExportRows(discs, owner){
     out.push([
       pd.manual_number || '', '',
       (d && (d.name_ru || d.name_en)) ? t(d.name_ru, d.name_en) : '',
-      designation, pd.note || '', responsibleName, '', '',
+      designation, pd.note || '', responsibleName, '',
     ]);
     sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id)).forEach(s => {
       out.push([
         s.manual_number || '', '',
         t(s.name_ru, s.name_en) || '',
-        designation, s.comment || '', '', s.revision || '', s.edition || '',
+        designation, s.comment || '', '', s.revision || '',
       ]);
     });
   });
@@ -1334,7 +1389,6 @@ function buildMdrExportRows(){
     t('Примечание','Remarks'),
     t('Ответственный исполнитель','Responsible Person'),
     t('Ревизия','Revision'),
-    t('Редакция','Edition'),
   ];
   const rows = [header];
 
@@ -1345,7 +1399,7 @@ function buildMdrExportRows(){
     positionRows.push([
       p.manual_number || '', p.position_code || '',
       (p.name_ru || p.name_en) ? t(p.name_ru, p.name_en) : '',
-      '', '', '', '', '',
+      '', '', '', '',
     ]);
     positionRows.push(...discSheetExportRows(discs, { pos: p.id }));
   });
@@ -1356,7 +1410,7 @@ function buildMdrExportRows(){
     rows.push([
       v.number || '', '',
       t(v.name_ru, v.name_en) || '',
-      '', '', '', '', '',
+      '', '', '', '',
     ]);
     if (v.is_positions_root){
       rows.push(...positionRows);
@@ -1453,7 +1507,7 @@ function renderMdrTab(){
           <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — показать только тома, повторный клик — вернуть все строки"><span class="lang-ru">Номер тома</span><span class="lang-en">Volume No.</span></th>
           <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию и показать только её, повторный клик — вернуть все строки"><span class="lang-ru">№ по ГП</span><span class="lang-en">Position No.</span></th>
           <th><span class="lang-ru">Наименование документа</span><span class="lang-en">Document Name</span></th>
-          <th><span class="lang-ru">Обозначение</span><span class="lang-en">Notation</span></th>
+          <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Обозначение</span><span class="lang-en">Notation</span></th>
           <th><span class="lang-ru">Примечание</span><span class="lang-en">Remarks</span></th>
           <th title="Задаётся во вкладке «Создание разделов»"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
           <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-en">Revision</span></th>
@@ -2011,7 +2065,7 @@ function bindTabEvents(id){
 
     document.getElementById('mdrVolHeader').addEventListener('click', () => {
       mdrVolumesOnly = !mdrVolumesOnly;
-      if (mdrVolumesOnly) mdrFilterPositionId = ''; // фильтры взаимоисключающие
+      if (mdrVolumesOnly){ mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; } // фильтры взаимоисключающие
       resetMdrRowToggles();
       applyMdrRowFilters();
     });
@@ -2031,8 +2085,29 @@ function bindTabEvents(id){
       showContextMenu(e.clientX, e.clientY, list.map(p => ({
         label: positionLabel(p),
         onClick: () => {
-          mdrVolumesOnly = false;
+          mdrVolumesOnly = false; mdrFilterDisciplineCode = '';
           mdrFilterPositionId = p.id;
+          resetMdrRowToggles();
+          applyMdrRowFilters();
+        },
+      })));
+    });
+
+    document.getElementById('mdrDesigHeader').addEventListener('click', (e) => {
+      e.stopPropagation(); // см. комментарий у mdrPosHeader выше
+      if (mdrFilterDisciplineCode){
+        mdrFilterDisciplineCode = '';
+        resetMdrRowToggles();
+        applyMdrRowFilters();
+        return;
+      }
+      const list = sortedDisciplines().filter(d => d.code);
+      if (!list.length) return alert('Разделы ещё не добавлены — см. вкладку «Проект».');
+      showContextMenu(e.clientX, e.clientY, list.map(d => ({
+        label: `${d.code} — ${d.name_ru || '(без названия)'}`,
+        onClick: () => {
+          mdrVolumesOnly = false; mdrFilterPositionId = '';
+          mdrFilterDisciplineCode = d.code;
           resetMdrRowToggles();
           applyMdrRowFilters();
         },

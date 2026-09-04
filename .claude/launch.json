@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "mdr-static",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5177"],
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "serve", "-l", "5177", "."],
       "port": 5177
     }
   ]

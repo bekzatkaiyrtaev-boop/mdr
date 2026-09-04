@@ -256,13 +256,29 @@ create table public.position_disciplines (
 
 alter table public.position_disciplines enable row level security;
 
+-- инженер может создавать/менять/удалять альбомы только своего раздела (там, где он
+-- значится исполнителем в discipline_assignees, см. has_discipline_access) — так вкладка
+-- "Создание разделов" открыта инженерам, но только по их собственным разделам
 create policy "position_disciplines_select" on public.position_disciplines for select using (true);
 create policy "position_disciplines_insert" on public.position_disciplines for insert
-  with check (public.current_user_role() in ('gip','gip_assistant'));
+  with check (
+    public.current_user_role() in ('gip','gip_assistant')
+    or public.has_discipline_access(discipline_code)
+  );
 create policy "position_disciplines_update" on public.position_disciplines for update
-  using (public.current_user_role() in ('gip','gip_assistant'));
+  using (
+    public.current_user_role() in ('gip','gip_assistant')
+    or public.has_discipline_access(discipline_code)
+  )
+  with check (
+    public.current_user_role() in ('gip','gip_assistant')
+    or public.has_discipline_access(discipline_code)
+  );
 create policy "position_disciplines_delete" on public.position_disciplines for delete
-  using (public.current_user_role() in ('gip','gip_assistant'));
+  using (
+    public.current_user_role() in ('gip','gip_assistant')
+    or public.has_discipline_access(discipline_code)
+  );
 
 -- ---------- документы (листы — добавляют инженеры в своём разделе) ----------
 create table public.documents (
