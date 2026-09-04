@@ -1006,6 +1006,7 @@ function titulFrameHtml(v, withSignatures){
         <div class="t-spacer"></div>
 
         <div class="t-stage">${esc(p.stage_en||'')} / ${esc(p.stage_ru||'')}</div>
+        ${v.volumeAlbum ? `<div class="t-vol-album">${esc(v.volumeAlbum)}</div>` : ''}
 
         ${withSignatures ? `
         <div class="t-sign-block">
@@ -1057,6 +1058,7 @@ function openTitulWindow(v){
     .t-designation { font-size: 30pt; font-weight:700; letter-spacing:0.5pt; }
     .t-discipline { font-size: 13pt; font-weight:700; }
     .t-stage { font-size: 12pt; }
+    .t-vol-album { font-size: 11pt; }
     .t-city { font-size: 11pt; }
     .no-print { position:fixed; top:10px; right:10px; z-index:10; padding:8px 16px; font-family:Arial,sans-serif; font-style:normal; font-size:14px; cursor:pointer; background:#2563eb; color:#fff; border:none; border-radius:6px; }
     @media print { body { background:#fff; } .titul-page { margin:0; } .no-print { display:none; } }
@@ -1169,24 +1171,36 @@ function bindSheetCompDetailEvents(){
     const d = pd ? disciplines.find(x => x.code === pd.discipline_code) : null;
     if (!pd || !d) return;
     const { kind, id } = parseSheetCompContainer();
-    let ownerRu = '', ownerEn = '', marker, designation;
+    let ownerRu = '', ownerEn = '', marker, designation, volumeAlbum = '';
     if (kind === 'vol'){
       const v = volumes.find(x => x.id === id);
       if (!v) return;
       ownerRu = v.name_ru || ''; ownerEn = v.name_en || '';
       marker = pd.marker || defaultMarkerForVolumeAlbum(v.id, pd.id);
       designation = computeDesignationVolume(marker);
+      // альбом прямо в томе (без позиции) — "Том N. Альбом M", M — порядковый номер
+      // раздела в этом томе из вкладки "Создание разделов"
+      const orderNum = sectionOrderNumbersForVolume(v.id)[pd.id] || '';
+      if (v.number) volumeAlbum = `Volume ${v.number}. Album ${orderNum} / Том ${v.number}. Альбом ${orderNum}`;
     } else {
       const p = positions.find(x => x.id === id);
       if (!p) return;
       ownerRu = p.name_ru || ''; ownerEn = p.name_en || '';
       marker = pd.marker || defaultMarkerForAlbum(p.id, pd.id);
       designation = computeDesignation(p.id, marker);
+      // альбом внутри позиции — "Том N. Альбом P.M": N — номер тома с is_positions_root
+      // (куда вложены позиции по генплану), P — номер позиции по генплану (position_code),
+      // M — порядковый номер раздела в этой позиции из вкладки "Создание разделов"
+      const rootVol = volumes.find(x => x.is_positions_root);
+      const volNum = rootVol ? (rootVol.number || '') : '';
+      const orderNum = sectionOrderNumbers(p.id)[pd.id] || '';
+      if (volNum) volumeAlbum = `Volume ${volNum}. Album ${p.position_code||''}.${orderNum} / Том ${volNum}. Альбом ${p.position_code||''}.${orderNum}`;
     }
     openTitulWindow({
       designation,
       disciplineRu: d.name_ru || '', disciplineEn: d.name_en || '',
       objectRu: ownerRu, objectEn: ownerEn,
+      volumeAlbum,
     });
   });
 
