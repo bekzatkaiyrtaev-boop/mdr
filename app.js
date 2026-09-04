@@ -1076,6 +1076,46 @@ function bindSheetCompDetailEvents(){
     }
   }));
 
+  // вставка из Excel: если в буфере несколько строк — первая идёт в текущую ячейку,
+  // остальные построчно вниз (в уже существующие листы альбома, а когда они кончаются —
+  // достраивают новые), как в Excel при вставке диапазона поверх одной ячейки
+  document.querySelectorAll('.sName').forEach(el => el.addEventListener('paste', async (e) => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!text || !text.includes('\n')) return; // одна строка — обычная вставка в поле, ничего не перехватываем
+    e.preventDefault();
+    const lines = text.split(/\r\n|\r|\n/).map(l => l.split('\t')[0].trim());
+    while (lines.length && lines[lines.length-1] === '') lines.pop(); // хвостовой перенос строки из Excel
+    if (!lines.length) return;
+
+    const pd = positionDisciplines.find(x => x.id === sheetCompAlbumId);
+    if (!pd) return;
+    const { kind, id } = parseSheetCompContainer();
+    const rows = sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === sheetCompAlbumId));
+    const startIdx = rows.findIndex(s => s.id === el.dataset.id);
+    if (startIdx < 0) return;
+
+    let nextOrder = sheets.filter(s => s.position_discipline_id === sheetCompAlbumId).reduce((max, s) => Math.max(max, s.sort_order), -1) + 1;
+    for (let i = 0; i < lines.length; i++){
+      const target = rows[startIdx + i];
+      if (target){
+        await dbWrite(sb.from('sheets').update({ name_ru: lines[i] || null, updated_at: new Date().toISOString() }).eq('id', target.id));
+      } else {
+        await dbWrite(sb.from('sheets').insert({
+          position_id: kind === 'pos' ? id : null,
+          discipline_code: pd.discipline_code,
+          position_discipline_id: sheetCompAlbumId,
+          sort_order: nextOrder++,
+          name_ru: lines[i] || null,
+          created_by: profile.id,
+        }));
+      }
+    }
+    const { data } = await sb.from('sheets').select('*').order('sort_order');
+    sheets = data || [];
+    document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
+    bindSheetCompDetailEvents();
+  }));
+
   document.querySelectorAll('.sStatus').forEach(el => el.addEventListener('change', async () => {
     const id = el.dataset.id;
     await dbWrite(sb.from('sheets').update({ status: el.value, updated_at: new Date().toISOString() }).eq('id', id));
