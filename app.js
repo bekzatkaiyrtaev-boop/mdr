@@ -483,7 +483,7 @@ function renderStandaloneVolumeDetail(){
               <button class="icon-btn btn-pin-disc ${pinned?'pinned':''}" data-pdid="${pd.id}" title="${pinned?'Открепить строку':'Закрепить строку (запретить сдвиг)'}">⚓</button>
               ` : ''}
             </td>
-            <td>${canEditRow ? `<button class="icon-btn btn-del-mdr-disc" data-pdid="${pd.id}" title="Удалить раздел">✕</button>` : ''}</td>
+            <td>${canEditRow ? `<button class="icon-btn btn-del-mdr-disc" data-pdid="${pd.id}" title="${pinned?'Открепите якорем, чтобы удалить':'Удалить раздел'}" ${pinned?'disabled':''}>✕</button>` : ''}</td>
           </tr>`;
         }).join('') || `<tr><td colspan="6" class="muted">Разделы пока не добавлены — нажмите «+ Добавить раздел»</td></tr>`}
       </table>
@@ -637,7 +637,7 @@ function renderSectionsDetail(){
               <button class="icon-btn btn-pin-disc ${pinned?'pinned':''}" data-pdid="${pd.id}" title="${pinned?'Открепить строку':'Закрепить строку (запретить сдвиг)'}">⚓</button>
               ` : ''}
             </td>
-            <td>${canEditRow ? `<button class="icon-btn btn-del-mdr-disc" data-pdid="${pd.id}" title="Удалить раздел">✕</button>` : ''}</td>
+            <td>${canEditRow ? `<button class="icon-btn btn-del-mdr-disc" data-pdid="${pd.id}" title="${pinned?'Открепите якорем, чтобы удалить':'Удалить раздел'}" ${pinned?'disabled':''}>✕</button>` : ''}</td>
           </tr>`;
         }).join('') || `<tr><td colspan="6" class="muted">Разделы пока не добавлены — нажмите «+ Добавить раздел»</td></tr>`}
       </table>
@@ -744,6 +744,8 @@ function bindAlbumEditEvents(){
   }));
 
   document.querySelectorAll('.btn-del-mdr-disc').forEach(b => b.addEventListener('click', async () => {
+    const pdLink = positionDisciplines.find(x => x.id === b.dataset.pdid);
+    if (pdLink && pdLink.pinned) return alert('Раздел закреплён якорем — сначала открепите, потом можно будет удалить.');
     if (!confirm('Удалить этот раздел? Уже добавленные в нём листы удалятся вместе с ним. Сам раздел (с исполнителями) останется — он мог использоваться и другими альбомами.')) return;
     await dbWrite(sb.from('position_disciplines').delete().eq('id', b.dataset.pdid));
     positionDisciplines = positionDisciplines.filter(x => x.id !== b.dataset.pdid);
