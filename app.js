@@ -63,6 +63,27 @@ async function dbWrite(promise){
   const { error } = await promise;
   if (error){ alert('Ошибка базы данных: ' + error.message); throw error; }
 }
+// постраничная загрузка всех строк таблицы — обычный select('*') у Supabase по умолчанию
+// молча обрезается на "Max Rows" (обычно 1000) в настройках API проекта; для таблиц,
+// которые могут вырасти за этот лимит (напр. sheets — сотни листов на альбом), обычный
+// select тихо "терял" часть строк в конце. orderCols — колонки для ORDER BY, важно указывать
+// колонку с уникальными значениями последней, иначе разбиение на страницы может задвоить
+// или пропустить строки при совпадающих значениях сортировки
+async function fetchAllRows(table, orderCols){
+  const pageSize = 1000;
+  let rows = [];
+  let from = 0;
+  while (true){
+    let q = sb.from(table).select('*');
+    orderCols.forEach(col => { q = q.order(col); });
+    const { data, error } = await q.range(from, from + pageSize - 1);
+    if (error){ alert('Ошибка базы данных: ' + error.message); throw error; }
+    rows = rows.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return rows;
+}
 function esc(s){ return (s ?? '').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 // черновой автоперевод (бесплатный эндпоинт Google Translate, без ключа) — результат можно поправить вручную
 async function translateRuToEn(text){
@@ -147,8 +168,7 @@ async function loadAll(){
   const { data: posDiscs } = await sb.from('position_disciplines').select('*');
   positionDisciplines = posDiscs || [];
 
-  const { data: shts } = await sb.from('sheets').select('*').order('sort_order');
-  sheets = shts || [];
+  sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
 
   const { data: vols } = await sb.from('volumes').select('*').order('created_at');
   volumes = vols || [];
@@ -1249,8 +1269,7 @@ function bindSheetCompDetailEvents(){
       sort_order: nextOrder,
       created_by: profile.id,
     }));
-    const { data } = await sb.from('sheets').select('*').order('sort_order');
-    sheets = data || [];
+    sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
     document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
     bindSheetCompDetailEvents();
   });
@@ -1300,24 +1319,33 @@ function bindSheetCompDetailEvents(){
     const startIdx = rows.findIndex(s => s.id === el.dataset.id);
     if (startIdx < 0) return;
 
+    // при большой вставке (сотни-тысячи строк) один запрос на строку слишком медленный —
+    // собираем обновления/вставки и отправляем каждую группу одним пакетным запросом
     let nextOrder = sheets.filter(s => s.position_discipline_id === sheetCompAlbumId).reduce((max, s) => Math.max(max, s.sort_order), -1) + 1;
+    const now = new Date().toISOString();
+    const updates = [];
+    const inserts = [];
     for (let i = 0; i < lines.length; i++){
       const target = rows[startIdx + i];
       if (target){
-        await dbWrite(sb.from('sheets').update({ name_ru: lines[i] || null, updated_at: new Date().toISOString() }).eq('id', target.id));
+        // discipline_code — обязательное поле в sheets; upsert формирует гипотетическую
+        // строку INSERT ещё до разрешения конфликта, поэтому его нужно передать даже
+        // при обновлении существующей строки, иначе Postgres выдаст not-null violation
+        updates.push({ id: target.id, discipline_code: target.discipline_code, name_ru: lines[i] || null, updated_at: now });
       } else {
-        await dbWrite(sb.from('sheets').insert({
+        inserts.push({
           position_id: kind === 'pos' ? id : null,
           discipline_code: pd.discipline_code,
           position_discipline_id: sheetCompAlbumId,
           sort_order: nextOrder++,
           name_ru: lines[i] || null,
           created_by: profile.id,
-        }));
+        });
       }
     }
-    const { data } = await sb.from('sheets').select('*').order('sort_order');
-    sheets = data || [];
+    if (updates.length) await dbWrite(sb.from('sheets').upsert(updates));
+    if (inserts.length) await dbWrite(sb.from('sheets').insert(inserts));
+    sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
     document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
     bindSheetCompDetailEvents();
   }));
