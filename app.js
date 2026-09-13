@@ -14,6 +14,7 @@ let sheets = [];
 let volumes = [];
 let allProfiles = [];
 let assignments = [];
+let assignmentAssignees = [];
 let currentLang = 'ru';
 let activeTab = null;
 
@@ -186,6 +187,9 @@ async function loadAll(){
 
   const { data: asgs } = await sb.from('assignments').select('*').order('sort_order');
   assignments = asgs || [];
+
+  const { data: asgAssignees } = await sb.from('assignment_assignees').select('*').order('created_at');
+  assignmentAssignees = asgAssignees || [];
 }
 
 // ---------------- tabs ----------------
@@ -289,6 +293,9 @@ function sortedDisciplines(){
 }
 function assigneesFor(disciplineId){
   return disciplineAssignees.filter(a => a.discipline_id === disciplineId);
+}
+function assigneesForAssignment(assignmentId){
+  return assignmentAssignees.filter(a => a.assignment_id === assignmentId);
 }
 function employeeName(employeeId){
   const e = employees.find(x => x.id === employeeId);
@@ -1407,11 +1414,16 @@ function myEmployeeIds(){
   const email = (profile.email || '').toLowerCase();
   return new Set(employees.filter(e => (e.email||'').toLowerCase() === email).map(e => e.id));
 }
-// количество невыполненных поручений (не "Выполнено" и не "Отменено"), где исполнитель — я;
+// id поручений, где среди (возможно нескольких) исполнителей есть я
+function myAssignmentIds(){
+  const ids = myEmployeeIds();
+  return new Set(assignmentAssignees.filter(a => ids.has(a.employee_id)).map(a => a.assignment_id));
+}
+// количество невыполненных поручений (не "Выполнено" и не "Отменено"), где я — один из исполнителей;
 // используется для красного кружка-бейджа на вкладке "Поручения"
 function myPendingAssignmentsCount(){
-  const ids = myEmployeeIds();
-  return assignments.filter(a => ids.has(a.assignee_id) && a.status !== 'done' && a.status !== 'cancelled').length;
+  const mine = myAssignmentIds();
+  return assignments.filter(a => mine.has(a.id) && a.status !== 'done' && a.status !== 'cancelled').length;
 }
 // обновляет только сам бейдж на вкладке "Поручения", не трогая остальные вкладки/навигацию
 // (в отличие от buildTabs(), который переключил бы на первую вкладку)
@@ -1844,7 +1856,7 @@ function filteredAssignments(){
     if (f.text && !(a.text||'').toLowerCase().includes(f.text.toLowerCase())) return false;
     if (f.basis && !(a.basis||'').toLowerCase().includes(f.basis.toLowerCase())) return false;
     if (f.author && a.author_id !== f.author) return false;
-    if (f.assignee && a.assignee_id !== f.assignee) return false;
+    if (f.assignee && !assigneesForAssignment(a.id).some(x => x.employee_id === f.assignee)) return false;
     if (f.status && a.status !== f.status) return false;
     if (f.note && !(a.note||'').toLowerCase().includes(f.note.toLowerCase())) return false;
     if (f.issuedFrom && (!a.issued_date || a.issued_date < f.issuedFrom)) return false;
@@ -1860,6 +1872,26 @@ function employeeSelectHtml(cls, rowId, selectedId, canEdit, blankLabel){
     <option value="">${esc(blankLabel)}</option>
     ${sortedEmployees().map(e => `<option value="${e.id}" ${selectedId===e.id?'selected':''}>${esc(e.full_name)}</option>`).join('')}
   </select>`;
+}
+// исполнители поручения — их может быть несколько (assignment_assignees), по аналогии с
+// "Разделы и исполнители" (assigneesFor/discipline_assignees)
+function assignmentAssigneesCellHtml(assignmentId, canEdit){
+  const rows = assigneesForAssignment(assignmentId);
+  if (!canEdit){
+    const names = rows.map(a => employeeName(a.employee_id)).filter(Boolean);
+    return names.length ? esc(names.join(', ')) : '';
+  }
+  return `
+    ${rows.map(a => `
+      <div class="assignee-row" data-aid="${a.id}" style="margin-bottom:2px;">
+        <select class="text-like aAssignmentEmployee" data-id="${a.id}" style="flex:1;min-width:0;">
+          <option value="">— сотрудник —</option>
+          ${sortedEmployees().map(e => `<option value="${e.id}" ${a.employee_id===e.id?'selected':''}>${esc(e.full_name)}</option>`).join('')}
+        </select>
+        <button class="icon-btn btn-del-assignment-assignee" data-id="${a.id}" title="Убрать исполнителя">✕</button>
+      </div>`).join('')}
+    <button class="btn secondary small btn-add-assignment-assignee" data-id="${assignmentId}" style="margin-top:2px;">+ исполнитель</button>
+  `;
 }
 // одна ячейка с двумя подписанными полями друг под другом (Автор/Исполнитель, Дата выдачи/Дедлайн)
 function stackedFieldHtml(label, fieldHtml){
@@ -1922,16 +1954,19 @@ function renderAssignmentsRows(){
     const msg = fullList.length ? 'Ничего не найдено по заданным фильтрам' : `Поручения пока не добавлены${canEdit?' — нажмите «+ Добавить поручение»':''}`;
     return `<tr><td colspan="${canEdit?8:7}" class="muted">${msg}</td></tr>`;
   }
+  const myIds = myEmployeeIds();
   return list.map(a => {
     const fullIdx = numberById[a.id] - 1;
+    // моё поручение "в работе" — подсвечиваем номер строки, чтобы сразу бросалось в глаза
+    const isMineInProgress = a.status === 'in_progress' && assigneesForAssignment(a.id).some(x => myIds.has(x.employee_id));
     return `
     <tr data-id="${a.id}">
-      <td class="muted" style="font-family:var(--mono);">${numberById[a.id]}</td>
+      <td class="${isMineInProgress ? '' : 'muted'}" style="font-family:var(--mono);${isMineInProgress ? 'color:var(--red);font-weight:700;' : ''}">${numberById[a.id]}</td>
       ${bigTextareaCellHtml('asgText', a.id, a.text, 'текст поручения', canEdit)}
       ${bigTextareaCellHtml('asgBasis', a.id, a.basis, 'основание', canEdit)}
       <td>
         ${stackedFieldHtml('Автор', employeeSelectHtml('asgAuthor', a.id, a.author_id, canEdit, '— автор —'))}
-        ${stackedFieldHtml('Исполнитель', employeeSelectHtml('asgAssignee', a.id, a.assignee_id, canEdit, '— исполнитель —'))}
+        ${stackedFieldHtml('Исполнители', assignmentAssigneesCellHtml(a.id, canEdit))}
       </td>
       <td>
         ${stackedFieldHtml('Дата выдачи', `<input type="date" class="text-like asgIssued" data-id="${a.id}" value="${esc(a.issued_date||'')}" ${canEdit?'':'disabled'} style="width:100%;">`)}
@@ -1969,7 +2004,7 @@ function renderAssignmentsTab(){
         ${assignmentsColgroupHtml(canEdit)}
         <thead>
           <tr>
-            <th>№</th><th>Поручение</th><th>Основание</th><th>Автор / Исполнитель</th><th>Дата выдачи / Дедлайн</th>
+            <th>№</th><th>Поручение</th><th>Основание</th><th>Автор / Исполнители</th><th>Дата выдачи / Дедлайн</th>
             <th>Статус</th><th>Примечание</th>${canEdit ? '<th></th>' : ''}
           </tr>
           ${renderAssignmentsFilterRow(canEdit)}
@@ -2000,14 +2035,34 @@ function bindAssignmentRowEvents(){
     if (a) a[field] = value;
   }));
 
-  document.querySelectorAll('.asgAuthor, .asgAssignee').forEach(el => el.addEventListener('change', async () => {
+  document.querySelectorAll('.asgAuthor').forEach(el => el.addEventListener('change', async () => {
     const id2 = el.dataset.id;
-    const field = el.classList.contains('asgAuthor') ? 'author_id' : 'assignee_id';
     const value = el.value || null;
-    await dbWrite(sb.from('assignments').update({ [field]: value }).eq('id', id2));
+    await dbWrite(sb.from('assignments').update({ author_id: value }).eq('id', id2));
     const a = assignments.find(x => x.id === id2);
-    if (a) a[field] = value;
-    if (field === 'assignee_id') updateAssignmentsBadge();
+    if (a) a.author_id = value;
+  }));
+
+  document.querySelectorAll('.btn-add-assignment-assignee').forEach(b => b.addEventListener('click', async () => {
+    await dbWrite(sb.from('assignment_assignees').insert({ assignment_id: b.dataset.id, created_by: profile.id }));
+    const { data } = await sb.from('assignment_assignees').select('*').order('created_at');
+    assignmentAssignees = data || [];
+    refreshAssignmentsBody();
+  }));
+
+  document.querySelectorAll('.aAssignmentEmployee').forEach(el => el.addEventListener('change', async () => {
+    const id2 = el.dataset.id;
+    const employee_id = el.value || null;
+    await dbWrite(sb.from('assignment_assignees').update({ employee_id }).eq('id', id2));
+    const a = assignmentAssignees.find(x => x.id === id2);
+    if (a) a.employee_id = employee_id;
+    updateAssignmentsBadge();
+  }));
+
+  document.querySelectorAll('.btn-del-assignment-assignee').forEach(b => b.addEventListener('click', async () => {
+    await dbWrite(sb.from('assignment_assignees').delete().eq('id', b.dataset.id));
+    assignmentAssignees = assignmentAssignees.filter(x => x.id !== b.dataset.id);
+    refreshAssignmentsBody();
   }));
 
   document.querySelectorAll('.asgIssued, .asgDeadline').forEach(el => el.addEventListener('change', async () => {
@@ -2045,6 +2100,7 @@ function bindAssignmentRowEvents(){
     if (!confirm('Удалить поручение?')) return;
     await dbWrite(sb.from('assignments').delete().eq('id', b.dataset.id));
     assignments = assignments.filter(x => x.id !== b.dataset.id);
+    assignmentAssignees = assignmentAssignees.filter(x => x.assignment_id !== b.dataset.id);
     refreshAssignmentsBody();
   }));
 }

@@ -416,7 +416,6 @@ create table public.assignments (
   text text,                    -- "Поручение"
   basis text,                   -- "Основание"
   author_id uuid references public.employees(id) on delete set null,
-  assignee_id uuid references public.employees(id) on delete set null,
   issued_date date,             -- "Дата выдачи"
   deadline date,                -- "Дедлайн"
   status text not null default 'not_started' check (status in ('not_started','in_progress','done','cancelled')),
@@ -432,3 +431,20 @@ create policy "assignments_select" on public.assignments for select using (true)
 create policy "assignments_insert" on public.assignments for insert with check (public.current_user_role() in ('gip','gip_assistant'));
 create policy "assignments_update" on public.assignments for update using (public.current_user_role() in ('gip','gip_assistant'));
 create policy "assignments_delete" on public.assignments for delete using (public.current_user_role() in ('gip','gip_assistant'));
+
+-- исполнители поручения (у одного поручения их может быть несколько) — по аналогии
+-- с discipline_assignees ("Разделы и исполнители")
+create table public.assignment_assignees (
+  id uuid primary key default gen_random_uuid(),
+  assignment_id uuid not null references public.assignments(id) on delete cascade,
+  employee_id uuid references public.employees(id) on delete set null,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz not null default now()
+);
+
+alter table public.assignment_assignees enable row level security;
+
+create policy "assignment_assignees_select" on public.assignment_assignees for select using (true);
+create policy "assignment_assignees_insert" on public.assignment_assignees for insert with check (public.current_user_role() in ('gip','gip_assistant'));
+create policy "assignment_assignees_update" on public.assignment_assignees for update using (public.current_user_role() in ('gip','gip_assistant'));
+create policy "assignment_assignees_delete" on public.assignment_assignees for delete using (public.current_user_role() in ('gip','gip_assistant'));
