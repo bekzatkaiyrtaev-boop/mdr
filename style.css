@@ -144,9 +144,10 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 .badge.cancelled{background:#3a1a1a;color:var(--red);}
 
 .tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);}
-.tab{padding:10px 16px;color:var(--muted);border-bottom:2px solid transparent;font-weight:600;font-size:13px;}
+.tab{padding:10px 16px;color:var(--muted);border-bottom:2px solid transparent;font-weight:600;font-size:13px;position:relative;}
 .tab.active{color:var(--accent);border-color:var(--accent);}
 .tab:hover{color:var(--text);}
+.tab-badge{position:absolute;top:2px;right:2px;background:var(--red);color:#fff;font-size:10px;font-weight:700;line-height:1;min-width:16px;height:16px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;}
 
 .subtabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border);}
 .subtab{padding:8px 14px;color:var(--muted);border-bottom:2px solid transparent;font-weight:600;font-size:12px;cursor:pointer;user-select:none;}

@@ -200,7 +200,10 @@ function buildTabs(){
   if (isFullAccess()) tabs.push(['users', 'Пользователи']);
 
   const tabsEl = document.getElementById('tabs');
-  tabsEl.innerHTML = tabs.map(([id,label]) => `<div class="tab" data-tab="${id}">${label}</div>`).join('');
+  tabsEl.innerHTML = tabs.map(([id,label]) => {
+    const badge = id === 'assignments' ? myPendingAssignmentsCount() : 0;
+    return `<div class="tab" data-tab="${id}">${label}${badge > 0 ? `<span class="tab-badge">${badge}</span>` : ''}</div>`;
+  }).join('');
   tabsEl.querySelectorAll('.tab').forEach(el => el.addEventListener('click', () => switchTab(el.dataset.tab)));
   switchTab(tabs[0][0]);
 }
@@ -1398,6 +1401,32 @@ function myDisciplineCodes(){
   const myDisciplineIds = new Set(disciplineAssignees.filter(a => myEmployeeIds.has(a.employee_id)).map(a => a.discipline_id));
   return disciplines.filter(d => myDisciplineIds.has(d.id)).map(d => d.code);
 }
+// строки employees, привязанные к текущему пользователю по email (обычно одна, но на всякий
+// случай считаем множеством — вдруг заведено несколько карточек сотрудника с одной почтой)
+function myEmployeeIds(){
+  const email = (profile.email || '').toLowerCase();
+  return new Set(employees.filter(e => (e.email||'').toLowerCase() === email).map(e => e.id));
+}
+// количество невыполненных поручений (не "Выполнено" и не "Отменено"), где исполнитель — я;
+// используется для красного кружка-бейджа на вкладке "Поручения"
+function myPendingAssignmentsCount(){
+  const ids = myEmployeeIds();
+  return assignments.filter(a => ids.has(a.assignee_id) && a.status !== 'done' && a.status !== 'cancelled').length;
+}
+// обновляет только сам бейдж на вкладке "Поручения", не трогая остальные вкладки/навигацию
+// (в отличие от buildTabs(), который переключил бы на первую вкладку)
+function updateAssignmentsBadge(){
+  const tabEl = document.querySelector('.tab[data-tab="assignments"]');
+  if (!tabEl) return;
+  const count = myPendingAssignmentsCount();
+  let badge = tabEl.querySelector('.tab-badge');
+  if (count > 0){
+    if (!badge){ badge = document.createElement('span'); badge.className = 'tab-badge'; tabEl.appendChild(badge); }
+    badge.textContent = count;
+  } else if (badge){
+    badge.remove();
+  }
+}
 // разделы (из "Проект" → "Разделы и исполнители"), где текущий пользователь — исполнитель;
 // используется, чтобы инженеру в "Создание разделов" предлагались только его разделы
 function myDisciplines(){
@@ -1955,6 +1984,7 @@ function renderAssignmentsTab(){
 function refreshAssignmentsBody(){
   document.getElementById('assignmentsBody').innerHTML = renderAssignmentsRows();
   bindAssignmentRowEvents();
+  updateAssignmentsBadge();
 }
 // события самих строк (текст/выбор сотрудника/даты/статус/порядок/удаление) — вызывается
 // и при первой отрисовке вкладки, и при каждом обновлении списка после смены фильтра
@@ -1977,6 +2007,7 @@ function bindAssignmentRowEvents(){
     await dbWrite(sb.from('assignments').update({ [field]: value }).eq('id', id2));
     const a = assignments.find(x => x.id === id2);
     if (a) a[field] = value;
+    if (field === 'assignee_id') updateAssignmentsBadge();
   }));
 
   document.querySelectorAll('.asgIssued, .asgDeadline').forEach(el => el.addEventListener('change', async () => {
@@ -1994,6 +2025,7 @@ function bindAssignmentRowEvents(){
     await dbWrite(sb.from('assignments').update({ status }).eq('id', id2));
     const a = assignments.find(x => x.id === id2);
     if (a) a.status = status;
+    updateAssignmentsBadge();
   }));
 
   document.querySelectorAll('.btn-move-assignment').forEach(b => b.addEventListener('click', async () => {
