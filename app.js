@@ -17,6 +17,9 @@ let assignments = [];
 let assignmentAssignees = [];
 let currentLang = 'ru';
 let activeTab = null;
+// заголовки-группы в "Разделы и исполнители" (Проект), которые сейчас свёрнуты —
+// сбрасывается при обновлении страницы, как и остальные ▼/▶ переключатели в приложении
+let collapsedDisciplineGroups = new Set();
 
 const STATUS_LABELS = {
   not_started:  { ru:'Не начат',            en:'Not started' },
@@ -261,7 +264,7 @@ const DISCIPLINE_NAME_SUGGESTIONS = [
 // список подсказок для поля названия раздела — сначала уже существующие в проекте разделы
 // (чтобы их переиспользовать, а не плодить дубли), затем типовые заготовки, которых ещё нет
 function disciplineNameOptionsHtml(){
-  const existing = [...new Set(disciplines.map(d => (d.name_ru||'').trim()).filter(Boolean))];
+  const existing = [...new Set(disciplines.filter(d => !d.is_header).map(d => (d.name_ru||'').trim()).filter(Boolean))];
   const existingLower = new Set(existing.map(n => n.toLowerCase()));
   const extras = DISCIPLINE_NAME_SUGGESTIONS.filter(n => !existingLower.has(n.toLowerCase()));
   return [...existing, ...extras].map(n => `<option value="${esc(n)}">`).join('');
@@ -327,6 +330,70 @@ function responsibleCellHtml(pd, d, canEdit = true){
   return `<input type="text" class="text-like mAlbumResponsible" data-pdid="${pd.id}" value="${esc(current)}" placeholder="ФИО не назначен" style="width:100%;">`;
 }
 
+// заголовок группы (напр. "Электрическая часть") — обычная строка в disciplines
+// (is_header=true), без кода/исполнителей; клик по треугольнику сворачивает/разворачивает
+// разделы, у которых group_id указывает на эту строку
+function disciplineHeaderRowHtml(d, members){
+  const collapsed = collapsedDisciplineGroups.has(d.id);
+  return `
+  <tr class="disc-header-row" style="background:rgba(37,99,235,.12);">
+    <td>
+      <button class="icon-btn btn-toggle-disc-group" data-id="${d.id}" title="${collapsed?'Развернуть':'Свернуть'} группу">${collapsed?'▶':'▼'}</button>
+    </td>
+    <td colspan="2">
+      <input type="text" class="text-like hNameRu lang-ru" data-id="${d.id}" value="${esc(d.name_ru||'')}" placeholder="название заголовка" style="display:block;width:100%;font-weight:700;">
+      <input type="text" class="text-like hNameEn lang-en" data-id="${d.id}" value="${esc(d.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;margin-top:2px;font-size:12px;color:var(--muted);">
+    </td>
+    <td class="muted" style="font-size:11px;">${members.length} раздел(ов)</td>
+    <td><button class="icon-btn btn-del-discipline" data-id="${d.id}" title="Удалить заголовок (разделы внутри останутся, просто окажутся без группы)">✕</button></td>
+  </tr>`;
+}
+// обычный раздел; nested=true — раздел вложен в заголовок группы (см. выше), просто отступ
+function disciplineRowHtml(d, headers, nested){
+  const incomplete = !d.code || !d.name_ru;
+  const assignees = assigneesFor(d.id);
+  return `
+  <tr ${incomplete ? 'style="background:rgba(239,68,68,.08);"' : ''}>
+    <td><input type="text" class="text-like dVolume" data-id="${d.id}" value="${esc(d.volume_number||'')}" placeholder="№" style="width:100%;"></td>
+    <td><input type="text" class="text-like dCode" data-id="${d.id}" value="${esc(d.code||'')}" placeholder="напр. АС" style="font-weight:700;width:100%;${!d.code ? 'color:var(--red);' : ''}"></td>
+    <td style="${nested ? 'padding-left:20px;' : ''}">
+      <input type="text" class="text-like dNameRu lang-ru" data-id="${d.id}" list="disciplineNameSuggestions" value="${esc(d.name_ru||'')}" placeholder="наименование не заполнено" style="display:block;width:100%;${!d.name_ru ? 'color:var(--red);' : ''}">
+      <input type="text" class="text-like dNameEn lang-en" data-id="${d.id}" value="${esc(d.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;margin-top:2px;font-size:12px;color:var(--muted);">
+      ${headers.length ? `
+      <select class="text-like dGroup" data-id="${d.id}" style="display:block;width:100%;margin-top:4px;font-size:11px;">
+        <option value="">— без группы —</option>
+        ${headers.map(h => `<option value="${h.id}" ${d.group_id===h.id?'selected':''}>${esc(h.name_ru||'(без названия)')}</option>`).join('')}
+      </select>` : ''}
+    </td>
+    <td>
+      ${assignees.map(a => `
+        <div class="assignee-row" data-aid="${a.id}">
+          <select class="text-like aEmployee" data-id="${a.id}" style="flex:1;min-width:0;">
+            <option value="">— выбрать сотрудника —</option>
+            ${sortedEmployees().map(e => `<option value="${e.id}" ${a.employee_id===e.id?'selected':''}>${esc(e.full_name)}</option>`).join('')}
+          </select>
+          <button class="icon-btn btn-del-assignee" data-id="${a.id}" title="Убрать исполнителя">✕</button>
+        </div>`).join('') || `<span class="muted" style="font-size:11px;">не назначены</span>`}
+      <button class="btn secondary small btn-add-assignee" data-id="${d.id}" style="margin-top:4px;">+ исполнитель</button>
+      ${!employees.length ? `<div class="muted" style="font-size:11px;margin-top:4px;">Сотрудники ещё не заведены — добавьте их во вкладке «Пользователи»</div>` : ''}
+    </td>
+    <td><button class="icon-btn btn-del-discipline" data-id="${d.id}" title="Удалить раздел">✕</button></td>
+  </tr>`;
+}
+// верхний уровень — заголовки групп и разделы без группы, в общем порядке по № п.п.;
+// у каждого заголовка сразу следом (если не свёрнут) идут разделы этой группы
+function renderDisciplinesRows(){
+  const all = sortedDisciplines();
+  const headers = all.filter(d => d.is_header);
+  const topLevel = all.filter(d => d.is_header || !d.group_id);
+  return topLevel.map(d => {
+    if (!d.is_header) return disciplineRowHtml(d, headers, false);
+    const members = all.filter(x => !x.is_header && x.group_id === d.id);
+    const collapsed = collapsedDisciplineGroups.has(d.id);
+    return disciplineHeaderRowHtml(d, members) + (collapsed ? '' : members.map(m => disciplineRowHtml(m, headers, true)).join(''));
+  }).join('');
+}
+
 function renderProjectTab(){
   return `
   <div class="card">
@@ -363,7 +430,10 @@ function renderProjectTab(){
   <div class="card">
     <div class="card-header">
       <span class="title">Разделы и исполнители</span>
-      <button class="btn small" id="btnAddDiscipline">+ Добавить раздел</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn secondary small" id="btnAddDisciplineHeader" title="Заголовок группы (напр. «Электрическая часть»), под которым можно свернуть/развернуть входящие в неё разделы">+ Заголовок</button>
+        <button class="btn small" id="btnAddDiscipline">+ Добавить раздел</button>
+      </div>
     </div>
     <div class="card-body" style="padding:0;">
       <table style="table-layout:fixed;">
@@ -371,32 +441,7 @@ function renderProjectTab(){
           <col style="width:70px;"><col style="width:90px;"><col><col style="width:260px;"><col style="width:44px;">
         </colgroup>
         <tr><th>№ п.п.</th><th>Код</th><th>Раздел</th><th>Исполнители</th><th></th></tr>
-        ${sortedDisciplines().map(d => {
-          const incomplete = !d.code || !d.name_ru;
-          const assignees = assigneesFor(d.id);
-          return `
-          <tr ${incomplete ? 'style="background:rgba(239,68,68,.08);"' : ''}>
-            <td><input type="text" class="text-like dVolume" data-id="${d.id}" value="${esc(d.volume_number||'')}" placeholder="№" style="width:100%;"></td>
-            <td><input type="text" class="text-like dCode" data-id="${d.id}" value="${esc(d.code||'')}" placeholder="напр. АС" style="font-weight:700;width:100%;${!d.code ? 'color:var(--red);' : ''}"></td>
-            <td>
-              <input type="text" class="text-like dNameRu lang-ru" data-id="${d.id}" list="disciplineNameSuggestions" value="${esc(d.name_ru||'')}" placeholder="наименование не заполнено" style="display:block;width:100%;${!d.name_ru ? 'color:var(--red);' : ''}">
-              <input type="text" class="text-like dNameEn lang-en" data-id="${d.id}" value="${esc(d.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;margin-top:2px;font-size:12px;color:var(--muted);">
-            </td>
-            <td>
-              ${assignees.map(a => `
-                <div class="assignee-row" data-aid="${a.id}">
-                  <select class="text-like aEmployee" data-id="${a.id}" style="flex:1;min-width:0;">
-                    <option value="">— выбрать сотрудника —</option>
-                    ${sortedEmployees().map(e => `<option value="${e.id}" ${a.employee_id===e.id?'selected':''}>${esc(e.full_name)}</option>`).join('')}
-                  </select>
-                  <button class="icon-btn btn-del-assignee" data-id="${a.id}" title="Убрать исполнителя">✕</button>
-                </div>`).join('') || `<span class="muted" style="font-size:11px;">не назначены</span>`}
-              <button class="btn secondary small btn-add-assignee" data-id="${d.id}" style="margin-top:4px;">+ исполнитель</button>
-              ${!employees.length ? `<div class="muted" style="font-size:11px;margin-top:4px;">Сотрудники ещё не заведены — добавьте их во вкладке «Пользователи»</div>` : ''}
-            </td>
-            <td><button class="icon-btn btn-del-discipline" data-id="${d.id}" title="Удалить раздел">✕</button></td>
-          </tr>`;
-        }).join('') || `<tr><td colspan="5" class="muted">Разделы пока не добавлены</td></tr>`}
+        ${renderDisciplinesRows() || `<tr><td colspan="5" class="muted">Разделы пока не добавлены</td></tr>`}
       </table>
       <datalist id="disciplineNameSuggestions">
         ${disciplineNameOptionsHtml()}
@@ -2240,6 +2285,53 @@ function bindTabEvents(id){
       await loadAll(); switchTab('project');
     });
 
+    document.getElementById('btnAddDisciplineHeader').addEventListener('click', async () => {
+      if (!project) return alert('Сначала сохраните шапку проекта');
+      const nums = disciplines.map(d => parseFloat(d.volume_number)).filter(n => !isNaN(n));
+      const nextNumber = nums.length ? Math.max(...nums) + 1 : 1;
+      await dbWrite(sb.from('disciplines').insert({
+        project_id: project.id,
+        volume_number: String(nextNumber),
+        is_header: true,
+        name_ru: 'Новый заголовок',
+        created_by: profile.id,
+      }));
+      await loadAll(); switchTab('project');
+    });
+
+    document.querySelectorAll('.btn-toggle-disc-group').forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.id;
+      if (collapsedDisciplineGroups.has(id)) collapsedDisciplineGroups.delete(id);
+      else collapsedDisciplineGroups.add(id);
+      document.getElementById('tabContent').innerHTML = renderProjectTab();
+      bindTabEvents('project');
+    }));
+
+    document.querySelectorAll('.hNameRu, .hNameEn').forEach(el => el.addEventListener('change', async () => {
+      const id = el.dataset.id;
+      const name_ru = document.querySelector(`.hNameRu[data-id="${id}"]`).value.trim();
+      const name_en = document.querySelector(`.hNameEn[data-id="${id}"]`).value.trim();
+      await dbWrite(sb.from('disciplines').update({ name_ru: name_ru || null, name_en: name_en || null }).eq('id', id));
+      const d = disciplines.find(x => x.id === id);
+      if (d){ d.name_ru = name_ru || null; d.name_en = name_en || null; }
+      if (d && d.name_ru && !d.name_en){
+        const translated = await translateRuToEn(d.name_ru);
+        if (translated){ await dbWrite(sb.from('disciplines').update({ name_en: translated }).eq('id', id)); d.name_en = translated; }
+      }
+      document.getElementById('tabContent').innerHTML = renderProjectTab();
+      bindTabEvents('project');
+    }));
+
+    document.querySelectorAll('.dGroup').forEach(el => el.addEventListener('change', async () => {
+      const id = el.dataset.id;
+      const group_id = el.value || null;
+      await dbWrite(sb.from('disciplines').update({ group_id }).eq('id', id));
+      const d = disciplines.find(x => x.id === id);
+      if (d) d.group_id = group_id;
+      document.getElementById('tabContent').innerHTML = renderProjectTab();
+      bindTabEvents('project');
+    }));
+
     document.querySelectorAll('.dVolume, .dCode, .dNameRu, .dNameEn').forEach(el => el.addEventListener('change', async () => {
       const id = el.dataset.id;
       const volume_number = document.querySelector(`.dVolume[data-id="${id}"]`).value.trim();
@@ -2301,7 +2393,11 @@ function bindTabEvents(id){
     }));
 
     document.querySelectorAll('.btn-del-discipline').forEach(b => b.addEventListener('click', async () => {
-      if (!confirm('Удалить раздел? Если он используется в каких-то альбомах в MDR, их названия перестанут отображаться (сами альбомы и листы не удаляются).')) return;
+      const d = disciplines.find(x => x.id === b.dataset.id);
+      const msg = d && d.is_header
+        ? 'Удалить заголовок группы? Разделы внутри неё не удалятся, просто останутся без группы.'
+        : 'Удалить раздел? Если он используется в каких-то альбомах в MDR, их названия перестанут отображаться (сами альбомы и листы не удаляются).';
+      if (!confirm(msg)) return;
       await dbWrite(sb.from('disciplines').delete().eq('id', b.dataset.id));
       await loadAll(); switchTab('project');
     }));

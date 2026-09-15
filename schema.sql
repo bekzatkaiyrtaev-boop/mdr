@@ -168,6 +168,8 @@ create table public.disciplines (
   name_ru text,                -- напр. "Архитектурные решения" — может быть заполнено позже
   name_en text,
   note text,                   -- примечание к разделу
+  is_header boolean not null default false, -- строка-заголовок группы (напр. "Электрическая часть") — не раздел
+  group_id uuid references public.disciplines(id) on delete set null, -- к какому заголовку относится раздел (если is_header=false)
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now(),
   constraint disciplines_project_code_unique unique (project_id, code)
