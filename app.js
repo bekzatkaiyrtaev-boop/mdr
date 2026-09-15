@@ -1171,7 +1171,7 @@ function renderSheetCompDetail(){
         <colgroup>
           <col><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col><col><col style="width:140px;"><col style="width:150px;"><col style="width:44px;">
         </colgroup>
-        <tr><th>Наименование листа</th><th>Формат</th><th>Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th>Статус</th><th></th></tr>
+        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Статус</th><th></th></tr>
         ${rows.length ? rows.map(s => `
           <tr data-id="${s.id}">
             <td>
@@ -1219,10 +1219,26 @@ async function insertSheetAdjacent(targetSheetId, dir){
     position_id: kind === 'pos' ? id : null, discipline_code: pd.discipline_code, position_discipline_id: sheetCompAlbumId,
     sort_order: insertIdx, created_by: profile.id,
   }));
-  const { data } = await sb.from('sheets').select('*').order('sort_order');
-  sheets = data || [];
+  sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
   document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
   bindSheetCompDetailEvents();
+}
+// двойной клик по заголовку столбца в "Состав разделов" — заполнить весь столбец значением
+// из первой строки (по аналогии с "протянуть вниз" в Excel), одним пакетным запросом
+function bindFillDownHeader(headerId, cellSelector, dbColumn, getValue){
+  const header = document.getElementById(headerId);
+  if (!header) return;
+  header.addEventListener('dblclick', async () => {
+    const cells = [...document.querySelectorAll(`#sheetCompDetail ${cellSelector}`)];
+    if (cells.length < 2 || cells[0].disabled) return;
+    const value = getValue(cells[0]);
+    const ids = cells.map(el => el.dataset.id);
+    if (!confirm(`Заполнить все ${ids.length} строк(и) в столбце «${header.textContent.trim()}» значением из первой строки?`)) return;
+    await dbWrite(sb.from('sheets').update({ [dbColumn]: value, updated_at: new Date().toISOString() }).in('id', ids));
+    sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
+    document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
+    bindSheetCompDetailEvents();
+  });
 }
 function bindSheetCompDetailEvents(){
   const btnTitul = document.getElementById('btnTitulSheet');
@@ -1366,6 +1382,12 @@ function bindSheetCompDetailEvents(){
     const s = sheets.find(x => x.id === id);
     if (s) s.status = el.value;
   }));
+
+  // двойной клик по заголовку "Формат"/"Ревизия"/"Статус" — заполнить весь столбец
+  // значением из первой строки (Excel-привычка "протянуть" значение вниз)
+  bindFillDownHeader('scHeaderFormat', '.sFormat', 'format', el => el.value.trim() || null);
+  bindFillDownHeader('scHeaderRevision', '.sRevision', 'revision', el => el.value.trim() || null);
+  bindFillDownHeader('scHeaderStatus', '.sStatus', 'status', el => el.value);
 
   document.querySelectorAll('.btn-translate-sheet').forEach(b => b.addEventListener('click', async () => {
     const s = sheets.find(x => x.id === b.dataset.id);
