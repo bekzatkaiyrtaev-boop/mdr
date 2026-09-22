@@ -1399,10 +1399,13 @@ function bindSheetCompDetailEvents(){
     for (let i = 0; i < lines.length; i++){
       const target = rows[startIdx + i];
       if (target){
-        // discipline_code — обязательное поле в sheets; upsert формирует гипотетическую
-        // строку INSERT ещё до разрешения конфликта, поэтому его нужно передать даже
-        // при обновлении существующей строки, иначе Postgres выдаст not-null violation
-        updates.push({ id: target.id, discipline_code: target.discipline_code, name_ru: lines[i] || null, updated_at: now });
+        // discipline_code и position_discipline_id — upsert формирует гипотетическую строку
+        // INSERT ещё до разрешения конфликта, и её проверяют: not-null constraint на
+        // discipline_code, и RLS-политика sheets_insert — она ищет position_discipline_id
+        // среди position_disciplines, а без этого поля в объекте он был бы NULL и политика
+        // отклоняла бы вставку ("new row violates row-level security policy for table sheets"),
+        // хотя по факту это обновление уже существующей строки, а не создание новой
+        updates.push({ id: target.id, discipline_code: target.discipline_code, position_discipline_id: sheetCompAlbumId, name_ru: lines[i] || null, updated_at: now });
       } else {
         inserts.push({
           position_id: kind === 'pos' ? id : null,
