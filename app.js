@@ -1900,7 +1900,7 @@ function renderMdrTab(){
           <th><span class="lang-ru">Примечание</span><span class="lang-en">Remarks</span></th>
           <th title="Задаётся во вкладке «Создание разделов»"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
           <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-en">Revision</span></th>
-          <th><span class="lang-ru">Редакция</span><span class="lang-en">Edition</span></th>
+          <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-en">Edition</span></th>
         </tr>
       </thead>
       <tbody>

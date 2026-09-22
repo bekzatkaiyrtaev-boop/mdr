@@ -182,7 +182,8 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 /* ===== Печать MDR — оформление как в Excel: чёрно-белая таблица с сеткой ===== */
 @media print{
   body{background:#fff !important;color:#000 !important;}
-  .topbar,.tabs,#btnPrintMdr{display:none !important;}
+  .topbar,.tabs,#btnPrintMdr,#btnAddMdrRow,#btnTranslateMdr,#btnExportMdr{display:none !important;}
+  #mdrEditionHeader{display:none !important;}
   .wrap{max-width:none !important;padding:0 !important;}
 
   .card{background:#fff !important;border:1px solid #000 !important;color:#000 !important;box-shadow:none !important;}
