@@ -1725,9 +1725,8 @@ function discSheetRowsHtml(discs, owner){
           <button class="mdr-toggle btn-toggle-disc" data-pdid="${pd.id}">▼</button>
         </td>
         <td style="padding-left:40px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Раздел и его шифр задаются во вкладке «Создание разделов»">
-          ${(d && (d.name_ru || d.name_en)) ? esc(t(d.name_ru, d.name_en)) : `<span style="opacity:.6;">раздел не выбран</span>`}
+          ${(d && (d.name_ru || d.name_en)) ? esc(t(d.name_ru, d.name_en)) : `<span style="opacity:.6;">раздел не выбран</span>`}${designation ? ` <span style="font-family:var(--mono);font-size:11px;font-weight:400;">(${esc(designation)})</span>` : ''}
         </td>
-        <td style="font-family:var(--mono);font-size:11px;">${esc(designation)}</td>
         <td>${esc(pd.note||'')}</td>
         <td title="Ответственный задаётся во вкладке «Создание разделов»">${esc(responsibleName)}</td>
         <td></td>
@@ -1737,7 +1736,7 @@ function discSheetRowsHtml(discs, owner){
       <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}">
         <td><input type="text" class="text-like sManualNum" data-id="${s.id}" value="${esc(s.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td></td>
-        <td colspan="2" style="padding-left:80px;">${esc(t(s.name_ru, s.name_en) || '—')}</td>
+        <td style="padding-left:80px;">${esc(t(s.name_ru, s.name_en) || '—')}</td>
         <td>${esc(s.comment||'')}</td>
         <td></td>
         <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.revision||'')}</td>
@@ -1746,7 +1745,7 @@ function discSheetRowsHtml(discs, owner){
   });
   return rows;
 }
-// строки MDR в виде массивов ячеек (та же иерархия и те же 8 колонок, что и в самой
+// строки MDR в виде массивов ячеек (та же иерархия и те же 6 колонок, что и в самой
 // таблице) — для выгрузки в CSV; используется и printable-таблицей, и экспортом
 function discSheetExportRows(discs, owner){
   const out = [];
@@ -1754,16 +1753,17 @@ function discSheetExportRows(discs, owner){
     const marker = pd.marker || (owner.pos ? defaultMarkerForAlbum(owner.pos, pd.id) : defaultMarkerForVolumeAlbum(owner.vol, pd.id));
     const designation = owner.pos ? computeDesignation(owner.pos, marker) : computeDesignationVolume(marker);
     const responsibleName = resolvedResponsibleName(pd, d);
+    const discName = (d && (d.name_ru || d.name_en)) ? t(d.name_ru, d.name_en) : '';
     out.push([
       pd.manual_number || '', '',
-      (d && (d.name_ru || d.name_en)) ? t(d.name_ru, d.name_en) : '',
-      designation, pd.note || '', responsibleName, '',
+      discName + (designation ? ` (${designation})` : ''),
+      pd.note || '', responsibleName, '',
     ]);
     sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id)).forEach(s => {
       out.push([
         s.manual_number || '', '',
         t(s.name_ru, s.name_en) || '',
-        designation, s.comment || '', '', s.revision || '',
+        s.comment || '', '', s.revision || '',
       ]);
     });
   });
@@ -1773,8 +1773,7 @@ function buildMdrExportRows(){
   const header = [
     t('Номер тома / номер альбома','Volume / Album No.'),
     t('№ по ГП','Position No.'),
-    t('Наименование документа','Document Name'),
-    t('Обозначение','Notation'),
+    t('Наименование документа (Обозначение)','Document Name (Notation)'),
     t('Примечание','Remarks'),
     t('Ответственный исполнитель','Responsible Person'),
     t('Ревизия','Revision'),
@@ -1788,7 +1787,7 @@ function buildMdrExportRows(){
     positionRows.push([
       p.manual_number || '', p.position_code || '',
       (p.name_ru || p.name_en) ? t(p.name_ru, p.name_en) : '',
-      '', '', '', '',
+      '', '', '',
     ]);
     positionRows.push(...discSheetExportRows(discs, { pos: p.id }));
   });
@@ -1799,7 +1798,7 @@ function buildMdrExportRows(){
     rows.push([
       v.number || '', '',
       t(v.name_ru, v.name_en) || '',
-      '', '', '', '',
+      '', '', '',
     ]);
     if (v.is_positions_root){
       rows.push(...positionRows);
@@ -1844,7 +1843,7 @@ function renderMdrTab(){
           <button class="mdr-toggle btn-toggle-pos" data-pos="${p.id}">▼</button>
           ${esc(p.position_code || '—')}
         </td>
-        <td colspan="6" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
+        <td colspan="5" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
           ${(p.name_ru || p.name_en) ? esc(t(p.name_ru, p.name_en)) : '<span style="opacity:.6;">не заполнено — см. «Позиции по ГП»</span>'}
         </td>
       </tr>`);
@@ -1859,7 +1858,7 @@ function renderMdrTab(){
       <tr class="mdr-vol-row">
         <td><input type="text" class="text-like volNumber" data-id="${v.id}" value="${esc(v.number||'')}" placeholder="№" style="width:100%;font-weight:700;"></td>
         <td>${volDiscs.length ? `<button class="mdr-toggle btn-toggle-vol" data-vol="${v.id}">▼</button>` : ''}</td>
-        <td colspan="5">
+        <td colspan="4">
           <input type="text" class="text-like volNameRu lang-ru" data-id="${v.id}" value="${esc(v.name_ru||'')}" placeholder="наименование не заполнено" style="display:block;width:100%;font-weight:700;">
           <input type="text" class="text-like volNameEn lang-en" data-id="${v.id}" value="${esc(v.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;">
         </td>
@@ -1897,14 +1896,13 @@ function renderMdrTab(){
   <div class="card" id="mdrPrintable" style="padding:0;">
     <table style="table-layout:fixed;">
       <colgroup>
-        <col style="width:90px;"><col style="width:70px;"><col><col style="width:170px;"><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col id="mdrEditionCol" style="width:110px;">
+        <col style="width:90px;"><col style="width:70px;"><col><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col id="mdrEditionCol" style="width:110px;">
       </colgroup>
       <thead>
         <tr>
           <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — показать только тома, повторный клик — вернуть все строки"><span class="lang-ru">Номер тома</span><span class="lang-en">Volume No.</span></th>
           <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию и показать только её, повторный клик — вернуть все строки"><span class="lang-ru">№ по ГП</span><span class="lang-en">Position No.</span></th>
-          <th><span class="lang-ru">Наименование документа</span><span class="lang-en">Document Name</span></th>
-          <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Обозначение</span><span class="lang-en">Notation</span></th>
+          <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-en">Document Name (Notation)</span></th>
           <th><span class="lang-ru">Примечание</span><span class="lang-en">Remarks</span></th>
           <th title="Задаётся во вкладке «Создание разделов»"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
           <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-en">Revision</span></th>
@@ -1912,7 +1910,7 @@ function renderMdrTab(){
         </tr>
       </thead>
       <tbody>
-        ${bodyRows.join('') || `<tr><td colspan="8" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
+        ${bodyRows.join('') || `<tr><td colspan="7" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
       </tbody>
     </table>
     <datalist id="disciplineNameSuggestions">
