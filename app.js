@@ -1745,86 +1745,104 @@ function discSheetRowsHtml(discs, owner){
   });
   return rows;
 }
-// строки MDR в виде массивов ячеек (та же иерархия и те же 6 колонок, что и в самой
-// таблице) — для выгрузки в CSV; используется и printable-таблицей, и экспортом
-function discSheetExportRows(discs, owner){
-  const out = [];
+// экспорт в Excel — HTML-таблица с инлайн-стилями, сохранённая с расширением .xls
+// (Excel открывает такой файл как обычную книгу и применяет инлайновое форматирование);
+// специально повторяет вид печатной версии (те же цвета строк/границы/шапка), т.к. обычный
+// CSV раньше открывался в Excel неотформатированной "кашей" без цветов и границ
+const XL_TD = 'border:1px solid #000;padding:3px 6px;font-size:11px;color:#000;';
+function mdrExcelDiscSheetRows(discs, owner){
+  const rows = [];
   discs.forEach(({ pd, d }) => {
     const marker = pd.marker || (owner.pos ? defaultMarkerForAlbum(owner.pos, pd.id) : defaultMarkerForVolumeAlbum(owner.vol, pd.id));
     const designation = owner.pos ? computeDesignation(owner.pos, marker) : computeDesignationVolume(marker);
     const responsibleName = resolvedResponsibleName(pd, d);
     const discName = (d && (d.name_ru || d.name_en)) ? t(d.name_ru, d.name_en) : '';
-    out.push([
-      pd.manual_number || '', '',
-      discName + (designation ? ` (${designation})` : ''),
-      pd.note || '', responsibleName, '',
-    ]);
+    const nameCell = esc(discName) + (designation ? ` (${esc(designation)})` : '');
+    rows.push(`
+      <tr>
+        <td style="${XL_TD}background:#ead1dc;font-weight:600;"></td>
+        <td style="${XL_TD}background:#ead1dc;font-weight:600;"></td>
+        <td style="${XL_TD}background:#ead1dc;font-weight:600;">${nameCell}</td>
+        <td style="${XL_TD}background:#ead1dc;">${esc(pd.note||'')}</td>
+        <td style="${XL_TD}background:#ead1dc;">${esc(responsibleName)}</td>
+        <td style="${XL_TD}background:#ead1dc;"></td>
+      </tr>`);
     sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id)).forEach(s => {
-      out.push([
-        s.manual_number || '', '',
-        t(s.name_ru, s.name_en) || '',
-        s.comment || '', '', s.revision || '',
-      ]);
+      rows.push(`
+      <tr>
+        <td style="${XL_TD}"></td>
+        <td style="${XL_TD}"></td>
+        <td style="${XL_TD}">${esc(t(s.name_ru, s.name_en) || '—')}</td>
+        <td style="${XL_TD}">${esc(s.comment||'')}</td>
+        <td style="${XL_TD}"></td>
+        <td style="${XL_TD}">${esc(s.revision||'')}</td>
+      </tr>`);
     });
   });
-  return out;
+  return rows;
 }
-function buildMdrExportRows(){
-  const header = [
-    t('Номер тома / номер альбома','Volume / Album No.'),
-    t('№ по ГП','Position No.'),
-    t('Наименование документа (Обозначение)','Document Name (Notation)'),
-    t('Примечание','Remarks'),
-    t('Ответственный исполнитель','Responsible Person'),
-    t('Ревизия','Revision'),
-  ];
-  const rows = [header];
-
+function buildMdrExcelHtml(){
+  const p = project || {};
   const posList = sortedPositions();
-  const groups = posList.map(p => ({ p, discs: disciplinesForPositionAll(p.id) }));
+  const groups = posList.map(pos => ({ pos, discs: disciplinesForPositionAll(pos.id) }));
   const positionRows = [];
-  groups.forEach(({ p, discs }) => {
-    positionRows.push([
-      p.manual_number || '', p.position_code || '',
-      (p.name_ru || p.name_en) ? t(p.name_ru, p.name_en) : '',
-      '', '', '',
-    ]);
-    positionRows.push(...discSheetExportRows(discs, { pos: p.id }));
+  groups.forEach(({ pos, discs }) => {
+    positionRows.push(`
+      <tr>
+        <td style="${XL_TD}background:#d9d2e9;font-weight:700;"></td>
+        <td style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc(pos.position_code||'—')}</td>
+        <td colspan="4" style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc((pos.name_ru||pos.name_en) ? t(pos.name_ru,pos.name_en) : '')}</td>
+      </tr>`);
+    positionRows.push(...mdrExcelDiscSheetRows(discs, { pos: pos.id }));
   });
 
+  const bodyRows = [];
   let positionRowsPlaced = false;
   sortedVolumes().forEach(v => {
     const volDiscs = v.is_positions_root ? [] : disciplinesForVolumeAll(v.id);
-    rows.push([
-      v.number || '', '',
-      t(v.name_ru, v.name_en) || '',
-      '', '', '',
-    ]);
+    bodyRows.push(`
+      <tr>
+        <td style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(v.number||'')}</td>
+        <td style="${XL_TD}background:#b4a7d6;font-weight:700;"></td>
+        <td colspan="4" style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(t(v.name_ru,v.name_en)||'')}</td>
+      </tr>`);
     if (v.is_positions_root){
-      rows.push(...positionRows);
+      bodyRows.push(...positionRows);
       positionRowsPlaced = true;
     } else if (volDiscs.length){
-      rows.push(...discSheetExportRows(volDiscs, { vol: v.id }));
+      bodyRows.push(...mdrExcelDiscSheetRows(volDiscs, { vol: v.id }));
     }
   });
-  if (!positionRowsPlaced) rows.push(...positionRows);
+  if (!positionRowsPlaced) bodyRows.push(...positionRows);
 
-  return rows;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
+    <table style="border-collapse:collapse;font-family:Arial,sans-serif;">
+      <tr><td colspan="6" style="font-weight:700;font-size:14px;padding:4px 6px;">${esc(t('СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)','MASTER DOCUMENT REGISTER (MDR)'))}</td></tr>
+      <tr><td colspan="6"></td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Номер договора','Contract No.'))}</td><td colspan="5" style="padding:2px 6px;">${esc(p.contract_number||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Наименование','Project Name'))}</td><td colspan="5" style="padding:2px 6px;">${esc(t(p.name_ru,p.name_en)||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Организация','Organization'))}</td><td colspan="5" style="padding:2px 6px;">${esc(t(p.company_name_ru,p.company_name_en)||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Стадия','Stage'))}</td><td colspan="5" style="padding:2px 6px;">${esc(t(p.stage_ru,p.stage_en)||'')}</td></tr>
+      <tr><td colspan="6"></td></tr>
+      <tr>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Номер тома','Volume No.'))}</th>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('№ по ГП','Position No.'))}</th>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Наименование документа (Обозначение)','Document Name (Notation)'))}</th>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Примечание','Remarks'))}</th>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ответственный исполнитель','Responsible Person'))}</th>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ревизия','Revision'))}</th>
+      </tr>
+      ${bodyRows.join('')}
+    </table>
+  </body></html>`;
 }
-function csvEscapeCell(value){
-  const s = (value == null) ? '' : String(value);
-  return /[",;\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
-// CSV открывается и в Excel, и в Google Таблицах без сторонних библиотек — простое и
-// надёжное решение без сборки проекта
-function downloadMdrCsv(){
-  const rows = buildMdrExportRows();
-  const csv = rows.map(row => row.map(csvEscapeCell).join(',')).join('\r\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM — чтобы кириллица не превратилась в кракозябры
+function downloadMdrExcel(){
+  const html = buildMdrExcelHtml();
+  const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `MDR_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `MDR_${new Date().toISOString().slice(0,10)}.xls`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1880,7 +1898,7 @@ function renderMdrTab(){
       <div style="display:flex;gap:8px;">
         <button class="btn secondary small" id="btnAddMdrRow">+ Добавить том</button>
         <button class="btn secondary small" id="btnTranslateMdr">🌐 Перевести на EN</button>
-        <button class="btn secondary small" id="btnExportMdr">📥 Скачать (Excel/CSV)</button>
+        <button class="btn secondary small" id="btnExportMdr">📥 Скачать (Excel)</button>
         <button class="btn small" id="btnPrintMdr">🖨 Печать</button>
       </div>
     </div>
@@ -2478,7 +2496,7 @@ function bindTabEvents(id){
     const btnPrint = document.getElementById('btnPrintMdr');
     if (btnPrint) btnPrint.addEventListener('click', () => window.print());
 
-    document.getElementById('btnExportMdr').addEventListener('click', () => downloadMdrCsv());
+    document.getElementById('btnExportMdr').addEventListener('click', () => downloadMdrExcel());
 
     document.getElementById('btnTranslateMdr').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
