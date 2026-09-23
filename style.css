@@ -185,7 +185,11 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
   body{background:#fff !important;color:#000 !important;}
   .topbar,.tabs,#btnPrintMdr,#btnAddMdrRow,#btnTranslateMdr,#btnExportMdr{display:none !important;}
   #mdrEditionHeader{display:none !important;}
-  #mdrEditionCol{visibility:collapse !important;}
+  /* только width:0, БЕЗ visibility:collapse — collapse по спецификации не отдаёт
+     освободившееся место соседним колонкам, а просто уменьшает всю таблицу на
+     ширину колонки; при обычном width:0 в table-layout:fixed место освобождается
+     ровно для гибкой колонки "Наименование документа", и таблица остаётся на 100% */
+  #mdrEditionCol{width:0 !important;}
   .btn-del-volume{display:none !important;}
   .wrap{max-width:none !important;padding:0 !important;}
 
