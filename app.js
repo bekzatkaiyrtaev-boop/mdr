@@ -1886,10 +1886,18 @@ function renderMdrTab(){
       </div>
     </div>
   </div>
+  <div class="mdr-print-header">
+    <table>
+      <tr><td class="mph-label">${t('Номер договора','Contract No.')}</td><td>${esc(project?.contract_number||'')}</td></tr>
+      <tr><td class="mph-label">${t('Наименование','Project Name')}</td><td>${esc(t(project?.name_ru, project?.name_en)||'')}</td></tr>
+      <tr><td class="mph-label">${t('Организация','Organization')}</td><td>${esc(t(project?.company_name_ru, project?.company_name_en)||'')}</td></tr>
+      <tr><td class="mph-label">${t('Стадия','Stage')}</td><td>${esc(t(project?.stage_ru, project?.stage_en)||'')}</td></tr>
+    </table>
+  </div>
   <div class="card" id="mdrPrintable" style="padding:0;">
     <table style="table-layout:fixed;">
       <colgroup>
-        <col style="width:90px;"><col style="width:70px;"><col><col style="width:170px;"><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col style="width:110px;">
+        <col style="width:90px;"><col style="width:70px;"><col><col style="width:170px;"><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col id="mdrEditionCol" style="width:110px;">
       </colgroup>
       <thead>
         <tr>

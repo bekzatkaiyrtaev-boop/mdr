@@ -180,11 +180,20 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 .hidden{display:none !important;}
 
 /* ===== Печать MDR — оформление как в Excel: чёрно-белая таблица с сеткой ===== */
+.mdr-print-header{display:none;}
 @media print{
   body{background:#fff !important;color:#000 !important;}
   .topbar,.tabs,#btnPrintMdr,#btnAddMdrRow,#btnTranslateMdr,#btnExportMdr{display:none !important;}
   #mdrEditionHeader{display:none !important;}
+  #mdrEditionCol{visibility:collapse !important;}
+  .btn-del-volume{display:none !important;}
   .wrap{max-width:none !important;padding:0 !important;}
+
+  /* шапка первого листа печати MDR: номер договора/наименование/организация/стадия */
+  .mdr-print-header{display:block !important;margin-bottom:10px;}
+  .mdr-print-header table{width:100%;border-collapse:collapse;}
+  .mdr-print-header td{border:none !important;background:#fff !important;padding:1px 6px !important;font-size:11px !important;}
+  .mdr-print-header .mph-label{font-weight:700;width:160px;white-space:nowrap;}
 
   .card{background:#fff !important;border:1px solid #000 !important;color:#000 !important;box-shadow:none !important;}
   .card-header{border-bottom:1px solid #000 !important;}
