@@ -1,17 +1,23 @@
 """Загрузка дампа БД на Google Drive и удаление бэкапов старше RETENTION_DAYS.
 
-Вызывается из .github/workflows/backup.yml после pg_dump.
+Вызывается из .github/workflows/backup.yml после pg_dump. Загружает файл от имени
+обычного Google-аккаунта через OAuth (refresh token) — НЕ через сервисный аккаунт:
+у сервисных аккаунтов нет собственной квоты на личном Диске ("Service Accounts do
+not have storage quota"), а Shared Drives недоступны без платного Google Workspace.
+Как получить refresh token — см. get_gdrive_refresh_token.py в корне репозитория
+(запускается один раз локально, не в CI).
 Нужные переменные окружения:
-  GDRIVE_SA_KEY    — содержимое JSON-ключа сервисного аккаунта (целиком)
-  GDRIVE_FOLDER_ID — id папки "Сохранение" на Google Диске
-  RETENTION_DAYS   — сколько дней хранить бэкапы (старые удаляются)
+  GDRIVE_CLIENT_ID     — OAuth client ID (Google Cloud Console, тип "Desktop app")
+  GDRIVE_CLIENT_SECRET — OAuth client secret
+  GDRIVE_REFRESH_TOKEN — refresh token, полученный через get_gdrive_refresh_token.py
+  GDRIVE_FOLDER_ID     — id папки "Сохранение" на Google Диске
+  RETENTION_DAYS       — сколько дней хранить бэкапы (старые удаляются)
 """
 import datetime
-import json
 import os
 import sys
 
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
@@ -20,10 +26,14 @@ def main():
     file_path = sys.argv[1]
     folder_id = os.environ["GDRIVE_FOLDER_ID"]
     retention_days = int(os.environ.get("RETENTION_DAYS", "60"))
-    sa_info = json.loads(os.environ["GDRIVE_SA_KEY"])
 
-    creds = service_account.Credentials.from_service_account_info(
-        sa_info, scopes=["https://www.googleapis.com/auth/drive"]
+    creds = Credentials(
+        token=None,
+        refresh_token=os.environ["GDRIVE_REFRESH_TOKEN"],
+        client_id=os.environ["GDRIVE_CLIENT_ID"],
+        client_secret=os.environ["GDRIVE_CLIENT_SECRET"],
+        token_uri="https://oauth2.googleapis.com/token",
+        scopes=["https://www.googleapis.com/auth/drive"],
     )
     drive = build("drive", "v3", credentials=creds)
 

@@ -45,7 +45,9 @@ jobs:
 
       - name: Upload to Google Drive and clean up old backups
         env:
-          GDRIVE_SA_KEY: ${{ secrets.GDRIVE_SA_KEY }}
+          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
           GDRIVE_FOLDER_ID: 1vN9Qm8NzQDdhA2R5Jwh_AWmDnWv21HPd
           RETENTION_DAYS: '10'
         run: python .github/scripts/backup_to_drive.py "backup_${TIMESTAMP}.sql"
