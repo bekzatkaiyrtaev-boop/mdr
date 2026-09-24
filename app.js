@@ -380,12 +380,15 @@ function disciplineRowHtml(d, headers, nested){
     <td><button class="icon-btn btn-del-discipline" data-id="${d.id}" title="Удалить раздел">✕</button></td>
   </tr>`;
 }
-// верхний уровень — заголовки групп и разделы без группы, в общем порядке по № п.п.;
-// у каждого заголовка сразу следом (если не свёрнут) идут разделы этой группы
+// верхний уровень — сначала заголовки групп (в алфавитном порядке по названию),
+// затем разделы без группы (в обычном порядке по № п.п.); у каждого заголовка сразу
+// следом (если не свёрнут) идут разделы этой группы
 function renderDisciplinesRows(){
   const all = sortedDisciplines();
   const headers = all.filter(d => d.is_header);
-  const topLevel = all.filter(d => d.is_header || !d.group_id);
+  const sortedHeaders = [...headers].sort((a,b) => (a.name_ru||'').localeCompare(b.name_ru||'', 'ru'));
+  const ungrouped = all.filter(d => !d.is_header && !d.group_id);
+  const topLevel = [...sortedHeaders, ...ungrouped];
   return topLevel.map(d => {
     if (!d.is_header) return disciplineRowHtml(d, headers, false);
     const members = all.filter(x => !x.is_header && x.group_id === d.id);
