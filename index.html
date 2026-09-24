@@ -31,7 +31,11 @@
           <button class="btn" id="btnLogin" style="flex:1;">Войти</button>
           <button class="btn secondary" id="btnSignup" style="flex:1;">Регистрация</button>
         </div>
+        <div style="text-align:center;">
+          <a href="#" id="linkForgotPassword" class="muted" style="font-size:12px;text-decoration:underline;">Забыли пароль?</a>
+        </div>
         <div class="error-msg hidden" id="errMsg"></div>
+        <div class="info-msg hidden" id="infoMsg"></div>
       </div>
     </div>
   </div>
@@ -44,8 +48,10 @@
 
 <script>
 const errMsg = document.getElementById('errMsg');
-function showError(msg){ errMsg.textContent = msg; errMsg.classList.remove('hidden'); }
+const infoMsg = document.getElementById('infoMsg');
+function showError(msg){ infoMsg.classList.add('hidden'); errMsg.textContent = msg; errMsg.classList.remove('hidden'); }
 function clearError(){ errMsg.classList.add('hidden'); }
+function showInfo(msg){ errMsg.classList.add('hidden'); infoMsg.textContent = msg; infoMsg.classList.remove('hidden'); }
 
 if (typeof window.supabase === 'undefined'){
   showError('Не удалось загрузить библиотеку Supabase (cdn.jsdelivr.net). Проверьте интернет-соединение, отключите блокировщик рекламы для этой страницы и обновите её.');
@@ -92,6 +98,17 @@ document.getElementById('btnSignup').addEventListener('click', async () => {
   const { error } = await sb.auth.signUp({ email, password, options: { data: { full_name } } });
   if (error) return showError(translateError(error.message));
   window.location.href = 'app.html';
+});
+
+document.getElementById('linkForgotPassword').addEventListener('click', async (e) => {
+  e.preventDefault();
+  clearError(); infoMsg.classList.add('hidden');
+  const email = document.getElementById('email').value.trim();
+  if (!email || !validateEmail(email)) return showError('Введите email в поле выше, затем нажмите «Забыли пароль?».');
+  const redirectTo = new URL('reset-password.html', window.location.href).toString();
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) return showError(translateError(error.message));
+  showInfo('Письмо со ссылкой для сброса пароля отправлено на ' + email + ' — проверьте почту (и папку «Спам»).');
 });
 
 // если уже залогинен — сразу в приложение

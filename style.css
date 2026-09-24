@@ -177,6 +177,7 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 
 .auth-box{max-width:360px;margin:80px auto;}
 .error-msg{color:var(--red);font-size:12px;margin-top:6px;}
+.info-msg{color:var(--green);font-size:12px;margin-top:6px;}
 .hidden{display:none !important;}
 
 /* ===== Печать MDR — оформление как в Excel: чёрно-белая таблица с сеткой ===== */
