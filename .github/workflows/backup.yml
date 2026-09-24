@@ -1,0 +1,51 @@
+name: Backup Supabase DB to Google Drive
+
+# 13:30 и 19:30 по времени Астаны/Актау (UTC+5) — GitHub Actions использует UTC,
+# поэтому в cron указаны 08:30 и 14:30 UTC. Плюс возможность запустить вручную
+# (кнопка "Run workflow" на вкладке Actions) — на случай внепланового бэкапа.
+on:
+  schedule:
+    - cron: '30 8 * * *'
+    - cron: '30 14 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # ставим свежий клиент postgresql (из стандартного apt может быть версия
+      # старше, чем сервер Supabase — pg_dump откажется работать с "будущей" версией)
+      - name: Install recent PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install google-api-python-client google-auth
+
+      - name: Dump database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          TS=$(TZ="Asia/Almaty" date +"%Y-%m-%d_%H-%M")
+          echo "TIMESTAMP=$TS" >> "$GITHUB_ENV"
+          pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges -F p > "backup_${TS}.sql"
+
+      - name: Upload to Google Drive and clean up old backups
+        env:
+          GDRIVE_SA_KEY: ${{ secrets.GDRIVE_SA_KEY }}
+          GDRIVE_FOLDER_ID: 1vN9Qm8NzQDdhA2R5Jwh_AWmDnWv21HPd
+          RETENTION_DAYS: '60'
+        run: python .github/scripts/backup_to_drive.py "backup_${TIMESTAMP}.sql"
