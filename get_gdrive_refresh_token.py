@@ -31,12 +31,25 @@ SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 def main():
     flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
-    creds = flow.run_local_server(port=0)
+    # prompt="consent" — заставляет Google выдать refresh_token даже если раньше
+    # уже авторизовывались этим же клиентом (иначе Google может его не прислать
+    # повторно, понадеявшись, что старый ещё жив)
+    creds = flow.run_local_server(port=0, prompt="consent", access_type="offline")
 
+    lines = [
+        f"GDRIVE_CLIENT_ID={creds.client_id}",
+        f"GDRIVE_CLIENT_SECRET={creds.client_secret}",
+        f"GDRIVE_REFRESH_TOKEN={creds.refresh_token}",
+    ]
     print("\n--- Сохраните эти три значения как секреты репозитория на GitHub ---")
-    print("GDRIVE_CLIENT_ID:", creds.client_id)
-    print("GDRIVE_CLIENT_SECRET:", creds.client_secret)
-    print("GDRIVE_REFRESH_TOKEN:", creds.refresh_token)
+    for line in lines:
+        print(line)
+
+    # дублируем в файл — копировать из него надёжнее, чем из терминала (там длинная
+    # строка может перенестись, и часть текста при выделении потеряется)
+    with open("gdrive_tokens.txt", "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print("\nЭти же значения сохранены в файл gdrive_tokens.txt — открой его и скопируй оттуда.")
 
 
 if __name__ == "__main__":
