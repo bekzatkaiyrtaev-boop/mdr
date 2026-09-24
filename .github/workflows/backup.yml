@@ -41,7 +41,7 @@ jobs:
         run: |
           TS=$(TZ="Asia/Almaty" date +"%Y-%m-%d_%H-%M")
           echo "TIMESTAMP=$TS" >> "$GITHUB_ENV"
-          pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges -F p > "backup_${TS}.sql"
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges -F p > "backup_${TS}.sql"
 
       - name: Upload to Google Drive and clean up old backups
         env:
