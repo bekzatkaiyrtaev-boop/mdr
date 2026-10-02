@@ -153,29 +153,38 @@ async function init(){
 }
 
 async function loadAll(){
-  const { data: proj } = await sb.from('projects').select('*').order('updated_at', { ascending:false }).limit(1);
+  // все запросы независимы друг от друга — запускаем параллельно одним Promise.all,
+  // а не по очереди (раньше каждый следующий ждал ответа предыдущего, из-за чего
+  // первая загрузка страницы складывалась из суммы всех round-trip'ов подряд)
+  const [
+    { data: proj }, { data: pos }, { data: discs }, { data: das }, { data: emps },
+    { data: posDiscs }, sheetsData, { data: vols }, { data: profs }, { data: asgs }, { data: asgAssignees },
+  ] = await Promise.all([
+    sb.from('projects').select('*').order('updated_at', { ascending:false }).limit(1),
+    sb.from('positions').select('*').order('sort_order'),
+    sb.from('disciplines').select('*').order('created_at'),
+    sb.from('discipline_assignees').select('*').order('created_at'),
+    sb.from('employees').select('*').order('full_name'),
+    sb.from('position_disciplines').select('*'),
+    fetchAllRows('sheets', ['sort_order', 'id']),
+    sb.from('volumes').select('*').order('created_at'),
+    sb.from('profiles').select('*').order('email'), // нужны всем ролям — колонка "Разработал" в MDR
+    sb.from('assignments').select('*').order('sort_order'),
+    sb.from('assignment_assignees').select('*').order('created_at'),
+  ]);
+
   project = (proj && proj[0]) || null;
   document.getElementById('projName').textContent = project ? (t(project.name_ru, project.name_en) || '—') : 'проект не создан';
-
-  const { data: pos } = await sb.from('positions').select('*').order('sort_order');
   positions = pos || [];
-
-  const { data: discs } = await sb.from('disciplines').select('*').order('created_at');
   disciplines = discs || [];
-
-  const { data: das } = await sb.from('discipline_assignees').select('*').order('created_at');
   disciplineAssignees = das || [];
-
-  const { data: emps } = await sb.from('employees').select('*').order('full_name');
   employees = emps || [];
-
-  const { data: posDiscs } = await sb.from('position_disciplines').select('*');
   positionDisciplines = posDiscs || [];
-
-  sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
-
-  const { data: vols } = await sb.from('volumes').select('*').order('created_at');
+  sheets = sheetsData;
   volumes = vols || [];
+  allProfiles = profs || [];
+  assignments = asgs || [];
+  assignmentAssignees = asgAssignees || [];
 
   // при первом заходе (томов ещё нет) — заводим 5 стандартных томов; их можно переименовать/удалить
   if (!volumes.length && project && isFullAccess()){
@@ -183,16 +192,6 @@ async function loadAll(){
     const { data: vols2 } = await sb.from('volumes').select('*').order('created_at');
     volumes = vols2 || [];
   }
-
-  // нужны всем ролям — используется для колонки "Разработал" в MDR, не только во вкладке "Пользователи"
-  const { data: profs } = await sb.from('profiles').select('*').order('email');
-  allProfiles = profs || [];
-
-  const { data: asgs } = await sb.from('assignments').select('*').order('sort_order');
-  assignments = asgs || [];
-
-  const { data: asgAssignees } = await sb.from('assignment_assignees').select('*').order('created_at');
-  assignmentAssignees = asgAssignees || [];
 }
 
 // ---------------- tabs ----------------
@@ -1258,16 +1257,20 @@ async function insertSheetAdjacent(targetSheetId, dir){
   const idx = rows.findIndex(x => x.id === targetSheetId);
   if (idx < 0) return;
   const insertIdx = dir === 'above' ? idx : idx + 1;
-  await Promise.all(rows
+  const shifted = rows
     .map((row, i) => ({ row, newOrder: i >= insertIdx ? i + 1 : i }))
-    .filter(({ row, newOrder }) => newOrder !== row.sort_order)
-    .map(({ row, newOrder }) => dbWrite(sb.from('sheets').update({ sort_order: newOrder }).eq('id', row.id))));
+    .filter(({ row, newOrder }) => newOrder !== row.sort_order);
+  await Promise.all(shifted.map(({ row, newOrder }) => dbWrite(sb.from('sheets').update({ sort_order: newOrder }).eq('id', row.id))));
+  shifted.forEach(({ row, newOrder }) => { row.sort_order = newOrder; });
   const { kind, id } = parseSheetCompContainer();
-  await dbWrite(sb.from('sheets').insert({
+  // .select() возвращает созданную строку сразу — не нужно перезагружать всю таблицу sheets
+  // (при тысячах листов в проекте это было самой медленной частью любого добавления)
+  const { data: inserted, error } = await sb.from('sheets').insert({
     position_id: kind === 'pos' ? id : null, discipline_code: pd.discipline_code, position_discipline_id: sheetCompAlbumId,
     sort_order: insertIdx, created_by: profile.id,
-  }));
-  sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
+  }).select().single();
+  if (error){ alert('Ошибка базы данных: ' + error.message); throw error; }
+  sheets.push(inserted);
   document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
   bindSheetCompDetailEvents();
 }
@@ -1282,8 +1285,10 @@ function bindFillDownHeader(headerId, cellSelector, dbColumn, getValue){
     const value = getValue(cells[0]);
     const ids = cells.map(el => el.dataset.id);
     if (!confirm(`Заполнить все ${ids.length} строк(и) в столбце «${header.textContent.trim()}» значением из первой строки?`)) return;
-    await dbWrite(sb.from('sheets').update({ [dbColumn]: value, updated_at: new Date().toISOString() }).in('id', ids));
-    sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
+    const updated_at = new Date().toISOString();
+    await dbWrite(sb.from('sheets').update({ [dbColumn]: value, updated_at }).in('id', ids));
+    const idSet = new Set(ids);
+    sheets.forEach(s => { if (idSet.has(s.id)){ s[dbColumn] = value; s.updated_at = updated_at; } });
     document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
     bindSheetCompDetailEvents();
   });
@@ -1336,14 +1341,15 @@ function bindSheetCompDetailEvents(){
     const { kind, id } = parseSheetCompContainer();
     const rows = sheets.filter(s => s.position_discipline_id === sheetCompAlbumId);
     const nextOrder = rows.length ? Math.max(...rows.map(s => s.sort_order)) + 1 : 0;
-    await dbWrite(sb.from('sheets').insert({
+    const { data: inserted, error } = await sb.from('sheets').insert({
       position_id: kind === 'pos' ? id : null,
       discipline_code: pd.discipline_code,
       position_discipline_id: sheetCompAlbumId,
       sort_order: nextOrder,
       created_by: profile.id,
-    }));
-    sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
+    }).select().single();
+    if (error){ alert('Ошибка базы данных: ' + error.message); throw error; }
+    sheets.push(inserted);
     document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
     bindSheetCompDetailEvents();
   });
@@ -1420,9 +1426,18 @@ function bindSheetCompDetailEvents(){
         });
       }
     }
-    if (updates.length) await dbWrite(sb.from('sheets').upsert(updates));
-    if (inserts.length) await dbWrite(sb.from('sheets').insert(inserts));
-    sheets = await fetchAllRows('sheets', ['sort_order', 'id']);
+    // точечно обновляем локальный sheets вместо перезагрузки всей таблицы (при больших
+    // проектах — тысячи листов — это было самой медленной частью вставки)
+    if (updates.length){
+      await dbWrite(sb.from('sheets').upsert(updates));
+      const byId = new Map(updates.map(u => [u.id, u]));
+      sheets.forEach(s => { const u = byId.get(s.id); if (u){ s.name_ru = u.name_ru; s.updated_at = u.updated_at; } });
+    }
+    if (inserts.length){
+      const { data: insertedRows, error } = await sb.from('sheets').insert(inserts).select();
+      if (error){ alert('Ошибка базы данных: ' + error.message); throw error; }
+      sheets.push(...insertedRows);
+    }
     document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
     bindSheetCompDetailEvents();
   }));
