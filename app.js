@@ -1062,7 +1062,7 @@ function titulFrameHtml(v, withSignatures){
   const p = project || {};
   const year = (p.contract_year || '').trim() || new Date().getFullYear();
   const gipNames = projectGipNames();
-  const gip = [gipNames.en, gipNames.ru].filter(Boolean).join(' / ');
+  const gip = [gipNames.ru, gipNames.en].filter(Boolean).join(' / ');
   const hasObject = !!(v.objectRu || v.objectEn);
   return `
   <div class="titul-page">
@@ -1070,41 +1070,41 @@ function titulFrameHtml(v, withSignatures){
       <div class="titul-content">
         <div class="t-header">
           <div class="t-org">
-            <div>Project Organization / Проектная организация</div>
-            <div class="t-org-name">${esc(p.company_name_en||'')} / ${esc(p.company_name_ru||'')}</div>
-            <div>SL / ГСЛ №${esc(p.license_number||'')}</div>
+            <div>Проектная организация / Project Organization</div>
+            <div class="t-org-name">${esc(p.company_name_ru||'')} / ${esc(p.company_name_en||'')}</div>
+            <div>ГСЛ №${esc(p.license_number||'')} / SL</div>
           </div>
           <div class="t-rule"></div>
         </div>
 
         <div class="t-project">
-          <div>${esc(p.name_en||'')}</div>
           <div>${esc(p.name_ru||'')}</div>
+          <div>${esc(p.name_en||'')}</div>
         </div>
         <div class="t-spacer"></div>
 
         ${hasObject ? `
         <div class="t-object">
-          <div>${esc(v.objectEn)}</div>
           <div>${esc(v.objectRu)}</div>
+          <div>${esc(v.objectEn)}</div>
         </div>
         <div class="t-spacer"></div>` : ''}
 
         <div class="t-designation">${esc(v.designation)}</div>
-        <div class="t-discipline">${esc(v.disciplineEn)} / ${esc(v.disciplineRu)}</div>
+        <div class="t-discipline">${esc(v.disciplineRu)} / ${esc(v.disciplineEn)}</div>
         <div class="t-spacer"></div>
 
-        <div class="t-stage">${esc(p.stage_en||'')} / ${esc(p.stage_ru||'')}</div>
+        <div class="t-stage">${esc(p.stage_ru||'')} / ${esc(p.stage_en||'')}</div>
         ${v.volumeAlbum ? `<div class="t-vol-album">${esc(v.volumeAlbum)}</div>` : ''}
         <div class="t-spacer"></div>
 
         ${withSignatures ? `
         <div class="t-sign-block">
-          <div class="t-sign-row"><span>Director of ${esc(p.company_name_en||'')} / Директор ${esc(p.company_name_ru||'')}</span><span class="t-sign-name">${esc(p.director_name_en||'')} / ${esc(p.director_name_ru||'')}</span></div>
-          <div class="t-sign-row"><span>Chief project engineer / Главный инженер проекта</span><span class="t-sign-name">${esc(gip)}</span></div>
+          <div class="t-sign-row"><span>Директор ${esc(p.company_name_ru||'')} / Director of ${esc(p.company_name_en||'')}</span><span class="t-sign-name">${esc(p.director_name_ru||'')} / ${esc(p.director_name_en||'')}</span></div>
+          <div class="t-sign-row"><span>Главный инженер проекта / Chief project engineer</span><span class="t-sign-name">${esc(gip)}</span></div>
         </div>` : `<div class="t-sign-block t-sign-empty"></div>`}
 
-        <div class="t-city">${esc(p.city_en||'')} ${esc(year)} / г.${esc(p.city_ru||'')} ${esc(year)} г.</div>
+        <div class="t-city">г.${esc(p.city_ru||'')} ${esc(year)} г. / ${esc(p.city_en||'')} ${esc(year)}</div>
       </div>
     </div>
   </div>`;
@@ -1306,7 +1306,7 @@ function bindSheetCompDetailEvents(){
       // альбом прямо в томе (без позиции) — "Том N. Альбом M", M — порядковый номер
       // раздела в этом томе из вкладки "Создание разделов"
       const orderNum = sectionOrderNumbersForVolume(v.id)[pd.id] || '';
-      if (v.number) volumeAlbum = `Volume ${v.number}. Album ${orderNum} / Том ${v.number}. Альбом ${orderNum}`;
+      if (v.number) volumeAlbum = `Том ${v.number}. Альбом ${orderNum} / Volume ${v.number}. Album ${orderNum}`;
     } else {
       const p = positions.find(x => x.id === id);
       if (!p) return;
@@ -1319,7 +1319,7 @@ function bindSheetCompDetailEvents(){
       const rootVol = volumes.find(x => x.is_positions_root);
       const volNum = rootVol ? (rootVol.number || '') : '';
       const orderNum = sectionOrderNumbers(p.id)[pd.id] || '';
-      if (volNum) volumeAlbum = `Volume ${volNum}. Album ${p.position_code||''}.${orderNum} / Том ${volNum}. Альбом ${p.position_code||''}.${orderNum}`;
+      if (volNum) volumeAlbum = `Том ${volNum}. Альбом ${p.position_code||''}.${orderNum} / Volume ${volNum}. Album ${p.position_code||''}.${orderNum}`;
     }
     openTitulWindow({
       designation,
