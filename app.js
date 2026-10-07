@@ -1071,7 +1071,7 @@ function titulFrameHtml(v, withSignatures){
           <div class="t-org">
             <div>Проектная организация / Project Organization</div>
             <div class="t-org-name">${esc(p.company_name_ru||'')} / ${esc(p.company_name_en||'')}</div>
-            <div>ГСЛ №${esc(p.license_number||'')} / SL</div>
+            <div>ГСЛ №${esc(p.license_number||'')} / SL №${esc(p.license_number||'')}</div>
           </div>
           <div class="t-rule"></div>
         </div>
