@@ -169,7 +169,7 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 .modal-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);}
 .modal-body{padding:18px;}
 
-.context-menu{position:fixed;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px;min-width:200px;}
+.context-menu{position:fixed;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px;min-width:200px;max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain;}
 .context-menu-item{display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text);padding:8px 12px;font-size:13px;border-radius:5px;cursor:pointer;font-family:var(--sans);}
 .context-menu-item:hover{background:var(--surface2);color:var(--accent);}
 

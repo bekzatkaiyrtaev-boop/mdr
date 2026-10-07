@@ -112,6 +112,7 @@ function showContextMenu(x, y, items){
   document.body.appendChild(menu);
   const rect = menu.getBoundingClientRect();
   menu.style.left = Math.max(4, Math.min(x, window.innerWidth - rect.width - 8)) + 'px';
+  // высота не больше окна — длинный список прокручивается колесом внутри меню
   menu.style.top = Math.max(4, Math.min(y, window.innerHeight - rect.height - 8)) + 'px';
   menu.querySelectorAll('.context-menu-item').forEach(btn => btn.addEventListener('click', () => {
     hideContextMenu();
@@ -124,7 +125,12 @@ function hideContextMenu(){
 }
 document.addEventListener('click', hideContextMenu);
 document.addEventListener('contextmenu', (e) => { if (!e.defaultPrevented) hideContextMenu(); });
-document.addEventListener('scroll', hideContextMenu, true);
+// прокрутка страницы закрывает меню, а прокрутка самого меню (длинный список) — нет
+document.addEventListener('scroll', (e) => {
+  const menu = document.getElementById('ctxMenu');
+  if (menu && e.target instanceof Node && menu.contains(e.target)) return;
+  hideContextMenu();
+}, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
 
 // ---------------- init / auth ----------------
