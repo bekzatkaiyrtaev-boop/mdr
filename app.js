@@ -1216,9 +1216,9 @@ function renderSheetCompDetail(){
     <div class="card-body" style="padding:0;">
       <table style="table-layout:fixed;">
         <colgroup>
-          <col><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col><col><col style="width:140px;"><col style="width:150px;"><col style="width:44px;">
+          <col><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col><col><col style="width:140px;"><col style="width:150px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
         </colgroup>
-        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Статус</th><th></th></tr>
+        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Статус</th><th>Обозначение заказчика</th><th id="scHeaderCustomerRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия заказчика</th><th></th></tr>
         ${rows.length ? rows.map(s => `
           <tr data-id="${s.id}">
             <td>
@@ -1239,8 +1239,10 @@ function renderSheetCompDetail(){
                 ${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${s.status===k?'selected':''}>${v.ru}</option>`).join('')}
               </select>
             </td>
+            <td><input type="text" class="text-like sCustomerDesignation" data-id="${s.id}" value="${esc(s.customer_designation||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
+            <td><input type="text" class="text-like sCustomerRevision" data-id="${s.id}" value="${esc(s.customer_revision||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td>${canEdit ? `<button class="icon-btn btn-del-sheet" data-id="${s.id}" title="Удалить лист">✕</button>` : ''}</td>
-          </tr>`).join('') : `<tr><td colspan="9" class="muted">Листы ещё не добавлены</td></tr>`}
+          </tr>`).join('') : `<tr><td colspan="11" class="muted">Листы ещё не добавлены</td></tr>`}
       </table>
       <datalist id="sheetFormatSuggestions">
         ${SHEET_FORMAT_SUGGESTIONS.map(f => `<option value="${f}">`).join('')}
@@ -1354,7 +1356,7 @@ function bindSheetCompDetailEvents(){
     bindSheetCompDetailEvents();
   });
 
-  document.querySelectorAll('.sName, .sNameEn, .sFormat, .sRevision, .sComment, .sReply, .sCheckedBy').forEach(el => el.addEventListener('change', async () => {
+  document.querySelectorAll('.sName, .sNameEn, .sFormat, .sRevision, .sComment, .sReply, .sCheckedBy, .sCustomerDesignation, .sCustomerRevision').forEach(el => el.addEventListener('change', async () => {
     const id = el.dataset.id;
     const payload = {
       name_ru: document.querySelector(`.sName[data-id="${id}"]`).value.trim() || null,
@@ -1364,6 +1366,8 @@ function bindSheetCompDetailEvents(){
       comment: document.querySelector(`.sComment[data-id="${id}"]`).value.trim() || null,
       reply: document.querySelector(`.sReply[data-id="${id}"]`).value.trim() || null,
       checked_by_name: document.querySelector(`.sCheckedBy[data-id="${id}"]`).value.trim() || null,
+      customer_designation: document.querySelector(`.sCustomerDesignation[data-id="${id}"]`).value.trim() || null,
+      customer_revision: document.querySelector(`.sCustomerRevision[data-id="${id}"]`).value.trim() || null,
       updated_at: new Date().toISOString(),
     };
     await dbWrite(sb.from('sheets').update(payload).eq('id', id));
@@ -1453,6 +1457,7 @@ function bindSheetCompDetailEvents(){
   // значением из первой строки (Excel-привычка "протянуть" значение вниз)
   bindFillDownHeader('scHeaderFormat', '.sFormat', 'format', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderRevision', '.sRevision', 'revision', el => el.value.trim() || null);
+  bindFillDownHeader('scHeaderCustomerRevision', '.sCustomerRevision', 'customer_revision', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderStatus', '.sStatus', 'status', el => el.value);
 
   document.querySelectorAll('.btn-translate-sheet').forEach(b => b.addEventListener('click', async () => {
@@ -1748,6 +1753,9 @@ function discSheetRowsHtml(discs, owner){
         <td>${esc(pd.note||'')}</td>
         <td title="Ответственный задаётся во вкладке «Создание разделов»">${esc(responsibleName)}</td>
         <td></td>
+        <td class="mdr-edition-cell"></td>
+        <td></td>
+        <td></td>
       </tr>`);
     sheetRows.forEach((s) => {
       rows.push(`
@@ -1758,6 +1766,9 @@ function discSheetRowsHtml(discs, owner){
         <td>${esc(s.comment||'')}</td>
         <td></td>
         <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.revision||'')}</td>
+        <td class="mdr-edition-cell"></td>
+        <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_designation||'')}</td>
+        <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_revision||'')}</td>
       </tr>`);
     });
   });
@@ -1784,6 +1795,8 @@ function mdrExcelDiscSheetRows(discs, owner){
         <td style="${XL_TD}background:#ead1dc;">${esc(pd.note||'')}</td>
         <td style="${XL_TD}background:#ead1dc;">${esc(responsibleName)}</td>
         <td style="${XL_TD}background:#ead1dc;"></td>
+        <td style="${XL_TD}background:#ead1dc;"></td>
+        <td style="${XL_TD}background:#ead1dc;"></td>
       </tr>`);
     sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id)).forEach(s => {
       rows.push(`
@@ -1794,6 +1807,8 @@ function mdrExcelDiscSheetRows(discs, owner){
         <td style="${XL_TD}">${esc(s.comment||'')}</td>
         <td style="${XL_TD}"></td>
         <td style="${XL_TD}">${esc(s.revision||'')}</td>
+        <td style="${XL_TD}">${esc(s.customer_designation||'')}</td>
+        <td style="${XL_TD}">${esc(s.customer_revision||'')}</td>
       </tr>`);
     });
   });
@@ -1809,7 +1824,7 @@ function buildMdrExcelHtml(){
       <tr>
         <td style="${XL_TD}background:#d9d2e9;font-weight:700;"></td>
         <td style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc(pos.position_code||'—')}</td>
-        <td colspan="4" style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc((pos.name_ru||pos.name_en) ? t(pos.name_ru,pos.name_en) : '')}</td>
+        <td colspan="6" style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc((pos.name_ru||pos.name_en) ? t(pos.name_ru,pos.name_en) : '')}</td>
       </tr>`);
     positionRows.push(...mdrExcelDiscSheetRows(discs, { pos: pos.id }));
   });
@@ -1822,7 +1837,7 @@ function buildMdrExcelHtml(){
       <tr>
         <td style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(v.number||'')}</td>
         <td style="${XL_TD}background:#b4a7d6;font-weight:700;"></td>
-        <td colspan="4" style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(t(v.name_ru,v.name_en)||'')}</td>
+        <td colspan="6" style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(t(v.name_ru,v.name_en)||'')}</td>
       </tr>`);
     if (v.is_positions_root){
       bodyRows.push(...positionRows);
@@ -1835,13 +1850,13 @@ function buildMdrExcelHtml(){
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
     <table style="border-collapse:collapse;font-family:Arial,sans-serif;">
-      <tr><td colspan="6" style="font-weight:700;font-size:14px;padding:4px 6px;">${esc(t('СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)','MASTER DOCUMENT REGISTER (MDR)'))}</td></tr>
-      <tr><td colspan="6"></td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Номер договора','Contract No.'))}</td><td colspan="5" style="padding:2px 6px;">${esc(p.contract_number||'')}</td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Наименование','Project Name'))}</td><td colspan="5" style="padding:2px 6px;">${esc(t(p.name_ru,p.name_en)||'')}</td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Организация','Organization'))}</td><td colspan="5" style="padding:2px 6px;">${esc(t(p.company_name_ru,p.company_name_en)||'')}</td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Стадия','Stage'))}</td><td colspan="5" style="padding:2px 6px;">${esc(t(p.stage_ru,p.stage_en)||'')}</td></tr>
-      <tr><td colspan="6"></td></tr>
+      <tr><td colspan="8" style="font-weight:700;font-size:14px;padding:4px 6px;">${esc(t('СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)','MASTER DOCUMENT REGISTER (MDR)'))}</td></tr>
+      <tr><td colspan="8"></td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Номер договора','Contract No.'))}</td><td colspan="7" style="padding:2px 6px;">${esc(p.contract_number||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Наименование','Project Name'))}</td><td colspan="7" style="padding:2px 6px;">${esc(t(p.name_ru,p.name_en)||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Организация','Organization'))}</td><td colspan="7" style="padding:2px 6px;">${esc(t(p.company_name_ru,p.company_name_en)||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Стадия','Stage'))}</td><td colspan="7" style="padding:2px 6px;">${esc(t(p.stage_ru,p.stage_en)||'')}</td></tr>
+      <tr><td colspan="8"></td></tr>
       <tr>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Номер тома','Volume No.'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('№ по ГП','Position No.'))}</th>
@@ -1849,6 +1864,8 @@ function buildMdrExcelHtml(){
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Примечание','Remarks'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ответственный исполнитель','Responsible Person'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ревизия','Revision'))}</th>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Обозначение заказчика','Customer Document No.'))}</th>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ревизия заказчика','Customer Revision'))}</th>
       </tr>
       ${bodyRows.join('')}
     </table>
@@ -1879,7 +1896,7 @@ function renderMdrTab(){
           <button class="mdr-toggle btn-toggle-pos" data-pos="${p.id}">▼</button>
           ${esc(p.position_code || '—')}
         </td>
-        <td colspan="5" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
+        <td colspan="7" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
           ${(p.name_ru || p.name_en) ? esc(t(p.name_ru, p.name_en)) : '<span style="opacity:.6;">не заполнено — см. «Позиции по ГП»</span>'}
         </td>
       </tr>`);
@@ -1894,7 +1911,7 @@ function renderMdrTab(){
       <tr class="mdr-vol-row">
         <td><input type="text" class="text-like volNumber" data-id="${v.id}" value="${esc(v.number||'')}" placeholder="№" style="width:100%;font-weight:700;"></td>
         <td>${volDiscs.length ? `<button class="mdr-toggle btn-toggle-vol" data-vol="${v.id}">▼</button>` : ''}</td>
-        <td colspan="4">
+        <td colspan="6">
           <input type="text" class="text-like volNameRu lang-ru" data-id="${v.id}" value="${esc(v.name_ru||'')}" placeholder="наименование не заполнено" style="display:block;width:100%;font-weight:700;">
           <input type="text" class="text-like volNameEn lang-en" data-id="${v.id}" value="${esc(v.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;">
         </td>
@@ -1932,7 +1949,7 @@ function renderMdrTab(){
   <div class="card" id="mdrPrintable" style="padding:0;">
     <table style="table-layout:fixed;">
       <colgroup>
-        <col style="width:90px;"><col style="width:70px;"><col><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col id="mdrEditionCol" style="width:110px;">
+        <col style="width:90px;"><col style="width:70px;"><col><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col id="mdrEditionCol" style="width:110px;"><col style="width:170px;"><col style="width:110px;">
       </colgroup>
       <thead>
         <tr>
@@ -1943,10 +1960,12 @@ function renderMdrTab(){
           <th title="Задаётся во вкладке «Создание разделов»"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
           <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-en">Revision</span></th>
           <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-en">Edition</span></th>
+          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение заказчика</span><span class="lang-en">Customer Document No.</span></th>
+          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия заказчика</span><span class="lang-en">Customer Revision</span></th>
         </tr>
       </thead>
       <tbody>
-        ${bodyRows.join('') || `<tr><td colspan="7" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
+        ${bodyRows.join('') || `<tr><td colspan="9" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
       </tbody>
     </table>
     <datalist id="disciplineNameSuggestions">

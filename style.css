@@ -185,7 +185,7 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 @media print{
   body{background:#fff !important;color:#000 !important;}
   .topbar,.tabs,#btnPrintMdr,#btnAddMdrRow,#btnTranslateMdr,#btnExportMdr{display:none !important;}
-  #mdrEditionHeader{display:none !important;}
+  #mdrEditionHeader,.mdr-edition-cell{display:none !important;}
   /* только width:0, БЕЗ visibility:collapse — collapse по спецификации не отдаёт
      освободившееся место соседним колонкам, а просто уменьшает всю таблицу на
      ширину колонки; при обычном width:0 в table-layout:fixed место освобождается
