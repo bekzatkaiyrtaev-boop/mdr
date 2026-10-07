@@ -1845,7 +1845,7 @@ function mdrExcelDiscSheetRows(discs, owner){
   });
   return rows;
 }
-function buildMdrExcelHtml(){
+function buildMdrExcelHtml(forPrint = false){
   const p = project || {};
   const posList = sortedPositions();
   const groups = posList.map(pos => ({ pos, discs: disciplinesForPositionAll(pos.id) }));
@@ -1879,8 +1879,7 @@ function buildMdrExcelHtml(){
   });
   if (!positionRowsPlaced) bodyRows.push(...positionRows);
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
-    <table style="border-collapse:collapse;font-family:Arial,sans-serif;">
+  const infoRows = `
       <tr><td colspan="8" style="font-weight:700;font-size:14px;padding:4px 6px;">${esc(t('СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)','MASTER DOCUMENT REGISTER (MDR)'))}</td></tr>
       <tr><td colspan="8"></td></tr>
       <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Номер договора','Contract No.'))}</td><td colspan="7" style="padding:2px 6px;">${esc(p.contract_number||'')}</td></tr>
@@ -1888,6 +1887,8 @@ function buildMdrExcelHtml(){
       <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Организация','Organization'))}</td><td colspan="7" style="padding:2px 6px;">${esc(t(p.company_name_ru,p.company_name_en)||'')}</td></tr>
       <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Стадия','Stage'))}</td><td colspan="7" style="padding:2px 6px;">${esc(t(p.stage_ru,p.stage_en)||'')}</td></tr>
       <tr><td colspan="8"></td></tr>
+`;
+  const headRow = `
       <tr>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Номер тома','Volume No.'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('№ по ГП','Position No.'))}</th>
@@ -1898,9 +1899,39 @@ function buildMdrExcelHtml(){
         <th style="${XL_TD}background:#ffe599;">${esc(t('Обозначение заказчика','Customer Document No.'))}</th>
         <th style="${XL_TD}background:#ffe599;">${esc(t('Ревизия заказчика','Customer Revision'))}</th>
       </tr>
-      ${bodyRows.join('')}
+`;
+  if (forPrint){
+    // лёгкая статичная версия для печати: без полей ввода и обработчиков, шапка столбцов
+    // повторяется на каждой странице; печать из самой страницы MDR (тысячи строк с input)
+    // падала с "Out of Memory"
+    const colgroup = '<colgroup><col style="width:6%;"><col style="width:6%;"><col style="width:36%;"><col style="width:12%;"><col style="width:14%;"><col style="width:8%;"><col style="width:10%;"><col style="width:8%;"></colgroup>';
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>MDR</title>
+    <style>
+      @page{size:A4 landscape;margin:8mm;}
+      body{margin:0;font-family:Arial,sans-serif;}
+      table{border-collapse:collapse;width:100%;}
+      table.mdr{table-layout:fixed;}
+      table.mdr td,table.mdr th{word-break:break-word;overflow-wrap:anywhere;}
+      thead{display:table-header-group;}
+      tr{break-inside:avoid;}
+    </style></head><body>
+    <table>${infoRows}</table>
+    <table class="mdr">${colgroup}<thead>${headRow}</thead><tbody>${bodyRows.join('')}</tbody></table>
+    <script>window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 300); });<\/script>
+  </body></html>`;
+  }
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
+    <table style="border-collapse:collapse;font-family:Arial,sans-serif;">
+${infoRows}${headRow}      ${bodyRows.join('')}
     </table>
   </body></html>`;
+}
+function printMdr(){
+  const w = window.open('', '_blank');
+  if (!w) return alert('Браузер заблокировал новое окно. Разрешите всплывающие окна для этого сайта и повторите.');
+  w.document.open();
+  w.document.write(buildMdrExcelHtml(true));
+  w.document.close();
 }
 function downloadMdrExcel(){
   const html = buildMdrExcelHtml();
@@ -2562,7 +2593,7 @@ function bindTabEvents(id){
   }
   else if (id === 'mdr'){
     const btnPrint = document.getElementById('btnPrintMdr');
-    if (btnPrint) btnPrint.addEventListener('click', () => window.print());
+    if (btnPrint) btnPrint.addEventListener('click', () => printMdr());
 
     document.getElementById('btnExportMdr').addEventListener('click', () => downloadMdrExcel());
 
