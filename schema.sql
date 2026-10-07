@@ -371,6 +371,8 @@ create table public.sheets (
                           -- в MDR ("Ревизия") просто отображается, не редактируется там
   edition text,           -- "Редакция" — задаётся прямо в MDR (обычно R01/R02/A1/A2/A3)
   designation text,       -- обозначение листа
+  customer_designation text, -- "Обозначение заказчика" — задаётся во вкладке "Состав разделов", в MDR справа
+  customer_revision text,    -- "Ревизия заказчика" — то же
   comment text,           -- комментарии к листу
   reply text,             -- ответы на комментарии
   checked_by_name text,   -- ФИО проверившего лист
