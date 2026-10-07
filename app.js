@@ -1707,13 +1707,19 @@ async function insertAlbumAdjacentVolume(volumeId, targetPdId, dir){
 // три независимых (взаимоисключающих) фильтра строк MDR — по клику на заголовки
 // "Номер тома" / "№ по ГП" / "Обозначение", плюс ручные ▼/▶ на отдельных строках,
 // которые продолжают работать независимо от этих фильтров
-let mdrVolumesOnly = false;         // "Номер тома" — показывать только строки томов
+let mdrVolumesOnly = false;         // "Номер тома" (1-й клик) — показывать только строки томов
+let mdrNoSheets = false;            // "Номер тома" (2-й клик) — весь список, кроме строк листов
 let mdrFilterPositionId = '';       // "№ по ГП" — показывать только эту позицию (+ её разделы/листы)
 let mdrFilterDisciplineCode = '';   // "Обозначение" — показывать только этот раздел (+ его листы), в любых позициях/томах
 function resetMdrRowToggles(){
   document.querySelectorAll('.mdr-toggle').forEach(b => b.textContent = '▼');
 }
 function applyMdrRowFilters(){
+  if (mdrNoSheets){
+    document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row').forEach(tr => tr.style.display = '');
+    document.querySelectorAll('tr.mdr-doc-row').forEach(tr => tr.style.display = 'none');
+    return;
+  }
   if (mdrVolumesOnly){
     document.querySelectorAll('tr.mdr-vol-row').forEach(tr => tr.style.display = '');
     document.querySelectorAll('tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = 'none');
@@ -1959,7 +1965,7 @@ function renderMdrTab(){
       </colgroup>
       <thead>
         <tr>
-          <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — показать только тома, повторный клик — вернуть все строки"><span class="lang-ru">Номер тома</span><span class="lang-en">Volume No.</span></th>
+          <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — только тома; второй клик — всё, кроме наименований листов; третий — вернуть все строки"><span class="lang-ru">Номер тома</span><span class="lang-en">Volume No.</span></th>
           <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию и показать только её, повторный клик — вернуть все строки"><span class="lang-ru">№ по ГП</span><span class="lang-en">Position No.</span></th>
           <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-en">Document Name (Notation)</span></th>
           <th><span class="lang-ru">Примечание</span><span class="lang-en">Remarks</span></th>
@@ -2640,8 +2646,11 @@ function bindTabEvents(id){
     }));
 
     document.getElementById('mdrVolHeader').addEventListener('click', () => {
-      mdrVolumesOnly = !mdrVolumesOnly;
-      if (mdrVolumesOnly){ mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; } // фильтры взаимоисключающие
+      // цикл по клику: все строки → только тома → всё, кроме листов → все строки
+      if (mdrNoSheets){ mdrNoSheets = false; }
+      else if (mdrVolumesOnly){ mdrVolumesOnly = false; mdrNoSheets = true; }
+      else { mdrVolumesOnly = true; }
+      if (mdrVolumesOnly || mdrNoSheets){ mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; } // фильтры взаимоисключающие
       resetMdrRowToggles();
       applyMdrRowFilters();
     });
@@ -2661,7 +2670,7 @@ function bindTabEvents(id){
       showContextMenu(e.clientX, e.clientY, list.map(p => ({
         label: positionLabel(p),
         onClick: () => {
-          mdrVolumesOnly = false; mdrFilterDisciplineCode = '';
+          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterDisciplineCode = '';
           mdrFilterPositionId = p.id;
           resetMdrRowToggles();
           applyMdrRowFilters();
@@ -2682,7 +2691,7 @@ function bindTabEvents(id){
       showContextMenu(e.clientX, e.clientY, list.map(d => ({
         label: `${d.code} — ${d.name_ru || '(без названия)'}`,
         onClick: () => {
-          mdrVolumesOnly = false; mdrFilterPositionId = '';
+          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterPositionId = '';
           mdrFilterDisciplineCode = d.code;
           resetMdrRowToggles();
           applyMdrRowFilters();
