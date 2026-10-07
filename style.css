@@ -16,7 +16,7 @@
 body.hide-lang-en .lang-en{display:none !important;}
 body.hide-lang-ru .lang-ru{display:none !important;}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.55;margin:0;}
-.wrap{max-width:1300px;margin:0 auto;padding:20px;}
+.wrap{max-width:1700px;margin:0 auto;padding:20px;}
 
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;}
 #mdrPrintable.card{overflow:visible;} /* иначе выпадающий список подсказок раздела обрезается краем карточки */
