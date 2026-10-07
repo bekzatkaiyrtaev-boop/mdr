@@ -1708,6 +1708,7 @@ async function insertAlbumAdjacentVolume(volumeId, targetPdId, dir){
 // "Номер тома" / "№ по ГП" / "Обозначение", плюс ручные ▼/▶ на отдельных строках,
 // которые продолжают работать независимо от этих фильтров
 let mdrVolumesOnly = false;         // "Номер тома" (1-й клик) — показывать только строки томов
+let mdrFilterRevision = null;       // "Ревизия" — null: фильтра нет; строка (в т.ч. '' = без ревизии): разделы с листами этой ревизии
 let mdrFilterResponsible = '';      // "Ответственный исполнитель" — разделы (альбомы) и листы этого исполнителя
 let mdrNoSheets = false;            // "Номер тома" (2-й клик) — весь список, кроме строк листов
 let mdrFilterPositionId = '';       // "№ по ГП" — показывать только эту позицию (+ её разделы/листы)
@@ -1716,6 +1717,27 @@ function resetMdrRowToggles(){
   document.querySelectorAll('.mdr-toggle').forEach(b => b.textContent = '▼');
 }
 function applyMdrRowFilters(){
+  const revBadge = document.getElementById('mdrRevBadge');
+  if (revBadge) revBadge.textContent = mdrFilterRevision === null ? '' : ': ' + (mdrFilterRevision || '—');
+  if (mdrFilterRevision !== null){
+    document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = 'none');
+    const pdids = new Set(), posIds = new Set(), volIds = new Set();
+    let anyPos = false;
+    // листы нужной ревизии + альбомы (разделы), в которых они лежат
+    document.querySelectorAll('tr.mdr-doc-row').forEach(tr => {
+      if (tr.dataset.rev !== mdrFilterRevision) return;
+      tr.style.display = '';
+      pdids.add(tr.dataset.pdid);
+      if (tr.dataset.pos){ posIds.add(tr.dataset.pos); anyPos = true; }
+      if (tr.dataset.vol) volIds.add(tr.dataset.vol);
+    });
+    document.querySelectorAll('tr.mdr-disc-row').forEach(tr => { if (pdids.has(tr.dataset.pdid)) tr.style.display = ''; });
+    document.querySelectorAll('tr.mdr-pos-row').forEach(tr => { if (posIds.has(tr.dataset.pos)) tr.style.display = ''; });
+    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => {
+      if (volIds.has(tr.dataset.volid) || (anyPos && tr.dataset.root)) tr.style.display = '';
+    });
+    return;
+  }
   if (mdrFilterResponsible){
     const all = document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row');
     all.forEach(tr => tr.style.display = 'none');
@@ -1790,7 +1812,7 @@ function discSheetRowsHtml(discs, owner){
       </tr>`);
     sheetRows.forEach((s) => {
       rows.push(`
-      <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}">
+      <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}" data-rev="${esc((s.revision||'').trim())}">
         <td><input type="text" class="text-like sManualNum" data-id="${s.id}" value="${esc(s.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td></td>
         <td style="padding-left:80px;">${esc(t(s.name_ru, s.name_en) || '—')}</td>
@@ -2022,7 +2044,7 @@ function renderMdrTab(){
           <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Document Name (Notation)</span></th>
           <th><span class="lang-ru">Примечание</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Remarks</span></th>
           <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя и показать его разделы и листы, повторный клик — вернуть все строки"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Responsible Person</span></th>
-          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span></th>
+          <th id="mdrRevHeader" style="cursor:pointer;user-select:none;" title="Клик — показать разделы и листы с одной ревизией, следующий клик — следующая ревизия, после последней — все строки"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span><span id="mdrRevBadge" style="color:var(--accent);font-weight:700;"></span></th>
           <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Edition</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение заказчика</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Customer Document No.</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия заказчика</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Customer Revision</span></th>
@@ -2702,7 +2724,7 @@ function bindTabEvents(id){
       if (mdrNoSheets){ mdrNoSheets = false; }
       else if (mdrVolumesOnly){ mdrVolumesOnly = false; mdrNoSheets = true; }
       else { mdrVolumesOnly = true; }
-      mdrFilterResponsible = '';
+      mdrFilterResponsible = ''; mdrFilterRevision = null;
       if (mdrVolumesOnly || mdrNoSheets){ mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; } // фильтры взаимоисключающие
       resetMdrRowToggles();
       applyMdrRowFilters();
@@ -2723,7 +2745,7 @@ function bindTabEvents(id){
       showContextMenu(e.clientX, e.clientY, list.map(p => ({
         label: positionLabel(p),
         onClick: () => {
-          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterResponsible = ''; mdrFilterDisciplineCode = '';
+          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterResponsible = ''; mdrFilterRevision = null; mdrFilterDisciplineCode = '';
           mdrFilterPositionId = p.id;
           resetMdrRowToggles();
           applyMdrRowFilters();
@@ -2744,7 +2766,7 @@ function bindTabEvents(id){
       showContextMenu(e.clientX, e.clientY, list.map(d => ({
         label: `${d.code} — ${d.name_ru || '(без названия)'}`,
         onClick: () => {
-          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterResponsible = ''; mdrFilterPositionId = '';
+          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterResponsible = ''; mdrFilterRevision = null; mdrFilterPositionId = '';
           mdrFilterDisciplineCode = d.code;
           resetMdrRowToggles();
           applyMdrRowFilters();
@@ -2755,7 +2777,7 @@ function bindTabEvents(id){
     document.getElementById('mdrRespHeader').addEventListener('click', (e) => {
       e.stopPropagation(); // см. комментарий у mdrPosHeader выше
       if (mdrFilterResponsible){
-        mdrFilterResponsible = '';
+        mdrFilterResponsible = ''; mdrFilterRevision = null;
         resetMdrRowToggles();
         applyMdrRowFilters();
         return;
@@ -2767,11 +2789,23 @@ function bindTabEvents(id){
         label: n,
         onClick: () => {
           mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterPositionId = ''; mdrFilterDisciplineCode = '';
-          mdrFilterResponsible = n;
+          mdrFilterResponsible = n; mdrFilterRevision = null;
           resetMdrRowToggles();
           applyMdrRowFilters();
         },
       })));
+    });
+
+    document.getElementById('mdrRevHeader').addEventListener('click', () => {
+      // цикл по клику: все строки → ревизия 1 → ревизия 2 → … → (без ревизии) → все строки
+      const revs = [...new Set([...document.querySelectorAll('tr.mdr-doc-row')].map(tr => tr.dataset.rev))]
+        .sort((a, b) => a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'ru', { numeric: true }));
+      if (!revs.length) return alert('Листов пока нет — см. вкладку «Состав разделов».');
+      const next = mdrFilterRevision === null ? 0 : revs.indexOf(mdrFilterRevision) + 1;
+      mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; mdrFilterResponsible = '';
+      mdrFilterRevision = next >= revs.length || next < 0 ? null : revs[next];
+      resetMdrRowToggles();
+      applyMdrRowFilters();
     });
 
     applyMdrRowFilters();
