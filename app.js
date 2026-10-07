@@ -1984,15 +1984,15 @@ function renderMdrTab(){
       </colgroup>
       <thead>
         <tr>
-          <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — только тома; второй клик — всё, кроме наименований листов; третий — вернуть все строки"><span class="lang-ru">Номер тома</span><span class="lang-en">Volume No.</span></th>
-          <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию и показать только её, повторный клик — вернуть все строки"><span class="lang-ru">№ по ГП</span><span class="lang-en">Position No.</span></th>
-          <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-en">Document Name (Notation)</span></th>
-          <th><span class="lang-ru">Примечание</span><span class="lang-en">Remarks</span></th>
-          <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя и показать его разделы и листы, повторный клик — вернуть все строки"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
-          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-en">Revision</span></th>
-          <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-en">Edition</span></th>
-          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение заказчика</span><span class="lang-en">Customer Document No.</span></th>
-          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия заказчика</span><span class="lang-en">Customer Revision</span></th>
+          <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — только тома; второй клик — всё, кроме наименований листов; третий — вернуть все строки"><span class="lang-ru">Номер тома</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Volume No.</span></th>
+          <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию и показать только её, повторный клик — вернуть все строки"><span class="lang-ru">№ по ГП</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Position No.</span></th>
+          <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Document Name (Notation)</span></th>
+          <th><span class="lang-ru">Примечание</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Remarks</span></th>
+          <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя и показать его разделы и листы, повторный клик — вернуть все строки"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Responsible Person</span></th>
+          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span></th>
+          <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Edition</span></th>
+          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение заказчика</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Customer Document No.</span></th>
+          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия заказчика</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Customer Revision</span></th>
         </tr>
       </thead>
       <tbody>
