@@ -1907,7 +1907,7 @@ function buildMdrExcelHtml(forPrint = false){
     const colgroup = '<colgroup><col style="width:6%;"><col style="width:6%;"><col style="width:36%;"><col style="width:12%;"><col style="width:14%;"><col style="width:8%;"><col style="width:10%;"><col style="width:8%;"></colgroup>';
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>MDR</title>
     <style>
-      @page{size:A4 landscape;margin:8mm;}
+      @page{size:A3 landscape;margin:10mm;}
       body{margin:0;font-family:Arial,sans-serif;}
       table{border-collapse:collapse;width:100%;}
       table.mdr{table-layout:fixed;}
