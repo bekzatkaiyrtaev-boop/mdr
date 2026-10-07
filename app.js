@@ -1708,6 +1708,7 @@ async function insertAlbumAdjacentVolume(volumeId, targetPdId, dir){
 // "Номер тома" / "№ по ГП" / "Обозначение", плюс ручные ▼/▶ на отдельных строках,
 // которые продолжают работать независимо от этих фильтров
 let mdrVolumesOnly = false;         // "Номер тома" (1-й клик) — показывать только строки томов
+let mdrFilterResponsible = '';      // "Ответственный исполнитель" — разделы (альбомы) и листы этого исполнителя
 let mdrNoSheets = false;            // "Номер тома" (2-й клик) — весь список, кроме строк листов
 let mdrFilterPositionId = '';       // "№ по ГП" — показывать только эту позицию (+ её разделы/листы)
 let mdrFilterDisciplineCode = '';   // "Обозначение" — показывать только этот раздел (+ его листы), в любых позициях/томах
@@ -1715,6 +1716,24 @@ function resetMdrRowToggles(){
   document.querySelectorAll('.mdr-toggle').forEach(b => b.textContent = '▼');
 }
 function applyMdrRowFilters(){
+  if (mdrFilterResponsible){
+    const all = document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row');
+    all.forEach(tr => tr.style.display = 'none');
+    const posIds = new Set(), volIds = new Set();
+    let anyPos = false;
+    document.querySelectorAll('tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => {
+      if (tr.dataset.resp !== mdrFilterResponsible) return;
+      tr.style.display = '';
+      if (tr.dataset.pos){ posIds.add(tr.dataset.pos); anyPos = true; }
+      if (tr.dataset.vol) volIds.add(tr.dataset.vol);
+    });
+    document.querySelectorAll('tr.mdr-pos-row').forEach(tr => { if (posIds.has(tr.dataset.pos)) tr.style.display = ''; });
+    // том показываем, если в нём есть отобранный альбом; том-хозяин позиций — если отобрана хоть одна позиция
+    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => {
+      if (volIds.has(tr.dataset.volid) || (anyPos && tr.dataset.root)) tr.style.display = '';
+    });
+    return;
+  }
   if (mdrNoSheets){
     document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row').forEach(tr => tr.style.display = '');
     document.querySelectorAll('tr.mdr-doc-row').forEach(tr => tr.style.display = 'none');
@@ -1754,7 +1773,7 @@ function discSheetRowsHtml(discs, owner){
     const responsibleName = resolvedResponsibleName(pd, d);
     const sheetRows = sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id));
     rows.push(`
-      <tr class="mdr-disc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}">
+      <tr class="mdr-disc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}">
         <td><input type="text" class="text-like mAlbumManualNum" data-pdid="${pd.id}" value="${esc(pd.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td>
           <button class="mdr-toggle btn-toggle-disc" data-pdid="${pd.id}">▼</button>
@@ -1771,7 +1790,7 @@ function discSheetRowsHtml(discs, owner){
       </tr>`);
     sheetRows.forEach((s) => {
       rows.push(`
-      <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}">
+      <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}">
         <td><input type="text" class="text-like sManualNum" data-id="${s.id}" value="${esc(s.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td></td>
         <td style="padding-left:80px;">${esc(t(s.name_ru, s.name_en) || '—')}</td>
@@ -1920,7 +1939,7 @@ function renderMdrTab(){
   sortedVolumes().forEach(v => {
     const volDiscs = v.is_positions_root ? [] : disciplinesForVolumeAll(v.id);
     bodyRows.push(`
-      <tr class="mdr-vol-row">
+      <tr class="mdr-vol-row" data-volid="${v.id}" ${v.is_positions_root ? 'data-root="1"' : ''}>
         <td><input type="text" class="text-like volNumber" data-id="${v.id}" value="${esc(v.number||'')}" placeholder="№" style="width:100%;font-weight:700;"></td>
         <td>${volDiscs.length ? `<button class="mdr-toggle btn-toggle-vol" data-vol="${v.id}">▼</button>` : ''}</td>
         <td colspan="6">
@@ -1969,7 +1988,7 @@ function renderMdrTab(){
           <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию и показать только её, повторный клик — вернуть все строки"><span class="lang-ru">№ по ГП</span><span class="lang-en">Position No.</span></th>
           <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-en">Document Name (Notation)</span></th>
           <th><span class="lang-ru">Примечание</span><span class="lang-en">Remarks</span></th>
-          <th title="Задаётся во вкладке «Создание разделов»"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
+          <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя и показать его разделы и листы, повторный клик — вернуть все строки"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
           <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-en">Revision</span></th>
           <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-en">Edition</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение заказчика</span><span class="lang-en">Customer Document No.</span></th>
@@ -2650,6 +2669,7 @@ function bindTabEvents(id){
       if (mdrNoSheets){ mdrNoSheets = false; }
       else if (mdrVolumesOnly){ mdrVolumesOnly = false; mdrNoSheets = true; }
       else { mdrVolumesOnly = true; }
+      mdrFilterResponsible = '';
       if (mdrVolumesOnly || mdrNoSheets){ mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; } // фильтры взаимоисключающие
       resetMdrRowToggles();
       applyMdrRowFilters();
@@ -2670,7 +2690,7 @@ function bindTabEvents(id){
       showContextMenu(e.clientX, e.clientY, list.map(p => ({
         label: positionLabel(p),
         onClick: () => {
-          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterDisciplineCode = '';
+          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterResponsible = ''; mdrFilterDisciplineCode = '';
           mdrFilterPositionId = p.id;
           resetMdrRowToggles();
           applyMdrRowFilters();
@@ -2691,8 +2711,30 @@ function bindTabEvents(id){
       showContextMenu(e.clientX, e.clientY, list.map(d => ({
         label: `${d.code} — ${d.name_ru || '(без названия)'}`,
         onClick: () => {
-          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterPositionId = '';
+          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterResponsible = ''; mdrFilterPositionId = '';
           mdrFilterDisciplineCode = d.code;
+          resetMdrRowToggles();
+          applyMdrRowFilters();
+        },
+      })));
+    });
+
+    document.getElementById('mdrRespHeader').addEventListener('click', (e) => {
+      e.stopPropagation(); // см. комментарий у mdrPosHeader выше
+      if (mdrFilterResponsible){
+        mdrFilterResponsible = '';
+        resetMdrRowToggles();
+        applyMdrRowFilters();
+        return;
+      }
+      const names = [...new Set([...document.querySelectorAll('tr.mdr-disc-row')].map(tr => tr.dataset.resp).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'ru'));
+      if (!names.length) return alert('Ответственные исполнители ещё не назначены — см. вкладку «Создание разделов».');
+      showContextMenu(e.clientX, e.clientY, names.map(n => ({
+        label: n,
+        onClick: () => {
+          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterPositionId = ''; mdrFilterDisciplineCode = '';
+          mdrFilterResponsible = n;
           resetMdrRowToggles();
           applyMdrRowFilters();
         },
