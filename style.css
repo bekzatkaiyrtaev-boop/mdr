@@ -86,6 +86,11 @@ tr.disc-row td{border-top:none;}
 #mdrPrintable table thead th{position:sticky;top:0;background:#f3f3f3;color:#000;z-index:1;box-shadow:none;}
 #mdrPrintable table tr:hover td{background:#f5f5f5;}
 tr.mdr-vol-row td,tr.mdr-pos-row td,tr.mdr-disc-row td,tr.mdr-doc-row td{color:#000;background:#fff;}
+/* столбцы заказчика ("Обозначение заказчика", "Ревизия заказчика") — выделены цветом */
+table th.cust-col,table td.cust-col{background:rgba(244,185,66,.14);}
+table tr:hover td.cust-col{background:rgba(244,185,66,.22);}
+#mdrPrintable table thead th.cust-col{background:#ffe599;}
+#mdrPrintable table td.cust-col,#mdrPrintable table tr:hover td.cust-col{background:#fff2cc;}
 tr.mdr-vol-row td{font-weight:700;}
 tr.mdr-pos-row td{font-weight:700;}
 tr.mdr-disc-row td{font-weight:600;}
@@ -206,6 +211,8 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
   /* печатаем все строки, даже свёрнутые на экране */
   tr.mdr-disc-row,tr.mdr-doc-row{display:table-row !important;}
   .mdr-toggle{display:none !important;}
+  #mdrPrintable table thead th.cust-col{background:#ffe599 !important;}
+  tr.mdr-doc-row td.cust-col{background:#fff2cc !important;}
 
   table{border-collapse:collapse !important;width:100% !important;}
   table th,table td{

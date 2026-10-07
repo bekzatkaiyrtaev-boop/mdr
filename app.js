@@ -1218,7 +1218,7 @@ function renderSheetCompDetail(){
         <colgroup>
           <col><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col><col><col style="width:140px;"><col style="width:150px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
         </colgroup>
-        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Статус</th><th>Обозначение заказчика</th><th id="scHeaderCustomerRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия заказчика</th><th></th></tr>
+        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col">Обозначение заказчика</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия заказчика</th><th></th></tr>
         ${rows.length ? rows.map(s => `
           <tr data-id="${s.id}">
             <td>
@@ -1239,8 +1239,8 @@ function renderSheetCompDetail(){
                 ${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${s.status===k?'selected':''}>${v.ru}</option>`).join('')}
               </select>
             </td>
-            <td><input type="text" class="text-like sCustomerDesignation" data-id="${s.id}" value="${esc(s.customer_designation||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
-            <td><input type="text" class="text-like sCustomerRevision" data-id="${s.id}" value="${esc(s.customer_revision||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
+            <td class="cust-col"><input type="text" class="text-like sCustomerDesignation" data-id="${s.id}" value="${esc(s.customer_designation||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
+            <td class="cust-col"><input type="text" class="text-like sCustomerRevision" data-id="${s.id}" value="${esc(s.customer_revision||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td>${canEdit ? `<button class="icon-btn btn-del-sheet" data-id="${s.id}" title="Удалить лист">✕</button>` : ''}</td>
           </tr>`).join('') : `<tr><td colspan="11" class="muted">Листы ещё не добавлены</td></tr>`}
       </table>
@@ -1767,8 +1767,8 @@ function discSheetRowsHtml(discs, owner){
         <td></td>
         <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.revision||'')}</td>
         <td class="mdr-edition-cell"></td>
-        <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_designation||'')}</td>
-        <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_revision||'')}</td>
+        <td class="muted cust-col" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_designation||'')}</td>
+        <td class="muted cust-col" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_revision||'')}</td>
       </tr>`);
     });
   });
@@ -1807,8 +1807,8 @@ function mdrExcelDiscSheetRows(discs, owner){
         <td style="${XL_TD}">${esc(s.comment||'')}</td>
         <td style="${XL_TD}"></td>
         <td style="${XL_TD}">${esc(s.revision||'')}</td>
-        <td style="${XL_TD}">${esc(s.customer_designation||'')}</td>
-        <td style="${XL_TD}">${esc(s.customer_revision||'')}</td>
+        <td style="${XL_TD}background:#fff2cc;">${esc(s.customer_designation||'')}</td>
+        <td style="${XL_TD}background:#fff2cc;">${esc(s.customer_revision||'')}</td>
       </tr>`);
     });
   });
@@ -1864,8 +1864,8 @@ function buildMdrExcelHtml(){
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Примечание','Remarks'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ответственный исполнитель','Responsible Person'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ревизия','Revision'))}</th>
-        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Обозначение заказчика','Customer Document No.'))}</th>
-        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ревизия заказчика','Customer Revision'))}</th>
+        <th style="${XL_TD}background:#ffe599;">${esc(t('Обозначение заказчика','Customer Document No.'))}</th>
+        <th style="${XL_TD}background:#ffe599;">${esc(t('Ревизия заказчика','Customer Revision'))}</th>
       </tr>
       ${bodyRows.join('')}
     </table>
@@ -1960,8 +1960,8 @@ function renderMdrTab(){
           <th title="Задаётся во вкладке «Создание разделов»"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
           <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-en">Revision</span></th>
           <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-en">Edition</span></th>
-          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение заказчика</span><span class="lang-en">Customer Document No.</span></th>
-          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия заказчика</span><span class="lang-en">Customer Revision</span></th>
+          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение заказчика</span><span class="lang-en">Customer Document No.</span></th>
+          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия заказчика</span><span class="lang-en">Customer Revision</span></th>
         </tr>
       </thead>
       <tbody>
