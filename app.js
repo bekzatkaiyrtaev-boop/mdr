@@ -1704,83 +1704,69 @@ async function insertAlbumAdjacentVolume(volumeId, targetPdId, dir){
   positionDisciplines = data || [];
   renderTab(activeTab);
 }
-// три независимых (взаимоисключающих) фильтра строк MDR — по клику на заголовки
-// "Номер тома" / "№ по ГП" / "Обозначение", плюс ручные ▼/▶ на отдельных строках,
-// которые продолжают работать независимо от этих фильтров
+// фильтры строк MDR по клику на заголовки — ВЗАИМОСВЯЗАНЫ: "№ по ГП", "Обозначение" (раздел),
+// "Ответственный исполнитель" и "Ревизия" работают одновременно (логическое "И"), поэтому можно,
+// например, выбрать позицию и потом ревизию — останутся разделы этой позиции с листами этой ревизии.
+// "Номер тома" — режим вида (только тома / без листов), накладывается поверх фильтров.
+// Ручные ▼/▶ на отдельных строках работают независимо
 let mdrVolumesOnly = false;         // "Номер тома" (1-й клик) — показывать только строки томов
-let mdrFilterRevision = null;       // "Ревизия" — null: фильтра нет; строка (в т.ч. '' = без ревизии): разделы с листами этой ревизии
-let mdrFilterResponsible = '';      // "Ответственный исполнитель" — разделы (альбомы) и листы этого исполнителя
 let mdrNoSheets = false;            // "Номер тома" (2-й клик) — весь список, кроме строк листов
-let mdrFilterPositionId = '';       // "№ по ГП" — показывать только эту позицию (+ её разделы/листы)
-let mdrFilterDisciplineCode = '';   // "Обозначение" — показывать только этот раздел (+ его листы), в любых позициях/томах
+let mdrFilterPositionId = '';       // "№ по ГП" — только эта позиция
+let mdrFilterDisciplineCode = '';   // "Обозначение" — только этот раздел, в любых позициях/томах
+let mdrFilterResponsible = '';      // "Ответственный исполнитель" — только разделы (альбомы) и листы этого исполнителя
+let mdrFilterRevision = null;       // "Ревизия" — null: фильтра нет; строка (в т.ч. '' = без ревизии): только листы этой ревизии
 function resetMdrRowToggles(){
   document.querySelectorAll('.mdr-toggle').forEach(b => b.textContent = '▼');
 }
+function mdrAnyDataFilter(){
+  return !!(mdrFilterPositionId || mdrFilterDisciplineCode || mdrFilterResponsible) || mdrFilterRevision !== null;
+}
+// проходит ли строка альбома/листа фильтры "позиция + раздел + исполнитель" (ревизия — отдельно, только у листов)
+function mdrAlbumPasses(tr, skip = ''){
+  return (skip === 'pos' || !mdrFilterPositionId || tr.dataset.pos === mdrFilterPositionId)
+    && (skip === 'code' || !mdrFilterDisciplineCode || tr.dataset.code === mdrFilterDisciplineCode)
+    && (skip === 'resp' || !mdrFilterResponsible || tr.dataset.resp === mdrFilterResponsible);
+}
+function updateMdrFilterBadges(){
+  const setBadge = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text ? ': ' + text : ''; };
+  const pos = mdrFilterPositionId ? positions.find(x => x.id === mdrFilterPositionId) : null;
+  setBadge('mdrVolBadge', mdrVolumesOnly ? 'только тома' : mdrNoSheets ? 'без листов' : '');
+  setBadge('mdrPosBadge', pos ? (pos.position_code || '—') : '');
+  setBadge('mdrDesigBadge', mdrFilterDisciplineCode);
+  setBadge('mdrRespBadge', mdrFilterResponsible);
+  setBadge('mdrRevBadge', mdrFilterRevision === null ? '' : (mdrFilterRevision || '—'));
+  const btn = document.getElementById('btnResetMdrFilters');
+  if (btn) btn.classList.toggle('hidden', !(mdrAnyDataFilter() || mdrVolumesOnly || mdrNoSheets));
+}
+function resetAllMdrFilters(){
+  mdrVolumesOnly = false; mdrNoSheets = false;
+  mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; mdrFilterResponsible = ''; mdrFilterRevision = null;
+}
 function applyMdrRowFilters(){
-  const revBadge = document.getElementById('mdrRevBadge');
-  if (revBadge) revBadge.textContent = mdrFilterRevision === null ? '' : ': ' + (mdrFilterRevision || '—');
-  if (mdrFilterRevision !== null){
-    document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = 'none');
-    const pdids = new Set(), posIds = new Set(), volIds = new Set();
-    let anyPos = false;
-    // листы нужной ревизии + альбомы (разделы), в которых они лежат
-    document.querySelectorAll('tr.mdr-doc-row').forEach(tr => {
-      if (tr.dataset.rev !== mdrFilterRevision) return;
-      tr.style.display = '';
-      pdids.add(tr.dataset.pdid);
+  updateMdrFilterBadges();
+  const any = mdrAnyDataFilter();
+  const posIds = new Set(), volIds = new Set(), okPdids = new Set();
+  let anyPos = false;
+  const docs = [...document.querySelectorAll('tr.mdr-doc-row')];
+  const okDoc = docs.map(tr => mdrAlbumPasses(tr) && (mdrFilterRevision === null || tr.dataset.rev === mdrFilterRevision));
+  docs.forEach((tr, i) => { if (okDoc[i]) okPdids.add(tr.dataset.pdid); });
+  // альбом (раздел) виден, если проходит фильтры и (при фильтре ревизии) в нём есть листы этой ревизии
+  document.querySelectorAll('tr.mdr-disc-row').forEach(tr => {
+    const ok = mdrAlbumPasses(tr) && (mdrFilterRevision === null || okPdids.has(tr.dataset.pdid));
+    tr.style.display = ok && !mdrVolumesOnly ? '' : 'none';
+    if (ok){
       if (tr.dataset.pos){ posIds.add(tr.dataset.pos); anyPos = true; }
       if (tr.dataset.vol) volIds.add(tr.dataset.vol);
-    });
-    document.querySelectorAll('tr.mdr-disc-row').forEach(tr => { if (pdids.has(tr.dataset.pdid)) tr.style.display = ''; });
-    document.querySelectorAll('tr.mdr-pos-row').forEach(tr => { if (posIds.has(tr.dataset.pos)) tr.style.display = ''; });
-    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => {
-      if (volIds.has(tr.dataset.volid) || (anyPos && tr.dataset.root)) tr.style.display = '';
-    });
-    return;
-  }
-  if (mdrFilterResponsible){
-    const all = document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row');
-    all.forEach(tr => tr.style.display = 'none');
-    const posIds = new Set(), volIds = new Set();
-    let anyPos = false;
-    document.querySelectorAll('tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => {
-      if (tr.dataset.resp !== mdrFilterResponsible) return;
-      tr.style.display = '';
-      if (tr.dataset.pos){ posIds.add(tr.dataset.pos); anyPos = true; }
-      if (tr.dataset.vol) volIds.add(tr.dataset.vol);
-    });
-    document.querySelectorAll('tr.mdr-pos-row').forEach(tr => { if (posIds.has(tr.dataset.pos)) tr.style.display = ''; });
-    // том показываем, если в нём есть отобранный альбом; том-хозяин позиций — если отобрана хоть одна позиция
-    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => {
-      if (volIds.has(tr.dataset.volid) || (anyPos && tr.dataset.root)) tr.style.display = '';
-    });
-    return;
-  }
-  if (mdrNoSheets){
-    document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row').forEach(tr => tr.style.display = '');
-    document.querySelectorAll('tr.mdr-doc-row').forEach(tr => tr.style.display = 'none');
-    return;
-  }
-  if (mdrVolumesOnly){
-    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => tr.style.display = '');
-    document.querySelectorAll('tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = 'none');
-    return;
-  }
-  if (mdrFilterPositionId){
-    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => tr.style.display = 'none');
-    document.querySelectorAll('tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => {
-      tr.style.display = tr.dataset.pos === mdrFilterPositionId ? '' : 'none';
-    });
-    return;
-  }
-  if (mdrFilterDisciplineCode){
-    document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row').forEach(tr => tr.style.display = 'none');
-    document.querySelectorAll('tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => {
-      tr.style.display = tr.dataset.code === mdrFilterDisciplineCode ? '' : 'none';
-    });
-    return;
-  }
-  document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = '');
+    }
+  });
+  docs.forEach((tr, i) => { tr.style.display = okDoc[i] && !mdrVolumesOnly && !mdrNoSheets ? '' : 'none'; });
+  // позиции и тома — как контекст для отобранных разделов
+  document.querySelectorAll('tr.mdr-pos-row').forEach(tr => {
+    tr.style.display = !mdrVolumesOnly && (!any || posIds.has(tr.dataset.pos)) ? '' : 'none';
+  });
+  document.querySelectorAll('tr.mdr-vol-row').forEach(tr => {
+    tr.style.display = (!any || volIds.has(tr.dataset.volid) || (anyPos && tr.dataset.root)) ? '' : 'none';
+  });
 }
 // строки альбомов + их листов для MDR — общая логика для альбомов внутри позиции
 // (owner = {pos:id}) и альбомов, стоящих прямо в "Отдельном томе" (owner = {vol:id})
@@ -2017,6 +2003,7 @@ function renderMdrTab(){
     <div class="card-header">
       <span class="title"><span class="lang-ru">СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)</span><span class="lang-ru lang-en"> / </span><span class="lang-en">MASTER DOCUMENT REGISTER (MDR)</span></span>
       <div style="display:flex;gap:8px;">
+        <button class="btn secondary small hidden" id="btnResetMdrFilters" title="Сбросить все фильтры шапки">✕ Сбросить фильтры</button>
         <button class="btn secondary small" id="btnAddMdrRow">+ Добавить том</button>
         <button class="btn secondary small" id="btnTranslateMdr">🌐 Перевести на EN</button>
         <button class="btn secondary small" id="btnExportMdr">📥 Скачать (Excel)</button>
@@ -2039,12 +2026,12 @@ function renderMdrTab(){
       </colgroup>
       <thead>
         <tr>
-          <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — только тома; второй клик — всё, кроме наименований листов; третий — вернуть все строки"><span class="lang-ru">Номер тома</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Volume No.</span></th>
-          <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию и показать только её, повторный клик — вернуть все строки"><span class="lang-ru">№ по ГП</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Position No.</span></th>
-          <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Document Name (Notation)</span></th>
+          <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — только тома; второй клик — всё, кроме наименований листов; третий — вернуть все строки. Работает вместе с остальными фильтрами"><span class="lang-ru">Номер тома</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Volume No.</span><span id="mdrVolBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию (фильтр работает вместе с остальными)"><span class="lang-ru">№ по ГП</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Position No.</span><span id="mdrPosBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел (фильтр работает вместе с остальными)"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Document Name (Notation)</span><span id="mdrDesigBadge" style="color:var(--accent);font-weight:700;"></span></th>
           <th><span class="lang-ru">Примечание</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Remarks</span></th>
-          <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя и показать его разделы и листы, повторный клик — вернуть все строки"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Responsible Person</span></th>
-          <th id="mdrRevHeader" style="cursor:pointer;user-select:none;" title="Клик — показать разделы и листы с одной ревизией, следующий клик — следующая ревизия, после последней — все строки"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span><span id="mdrRevBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя (фильтр работает вместе с остальными)"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Responsible Person</span><span id="mdrRespBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th id="mdrRevHeader" style="cursor:pointer;user-select:none;" title="Клик — ревизия по кругу: каждый клик — следующая ревизия, после последней — все (фильтр работает вместе с остальными)"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span><span id="mdrRevBadge" style="color:var(--accent);font-weight:700;"></span></th>
           <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Edition</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение заказчика</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Customer Document No.</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия заказчика</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Customer Revision</span></th>
@@ -2719,93 +2706,70 @@ function bindTabEvents(id){
         .forEach(tr => tr.style.display = collapsed ? 'none' : '');
     }));
 
+    // меню выбора значения фильтра: первым пунктом — сброс этого фильтра, текущее значение помечено ✓
+    const showMdrFilterMenu = (e, title, current, options, onPick) => {
+      e.stopPropagation(); // иначе клик долетает до document → hideContextMenu и закрывает открываемый список
+      const items = [{ label: '✕ Все (сбросить этот фильтр)', onClick: () => onPick(null) }]
+        .concat(options.map(o => ({ label: (o.value === current ? '✓ ' : '') + o.label, onClick: () => onPick(o.value) })));
+      showContextMenu(e.clientX, e.clientY, items);
+    };
+    const refreshMdr = () => { resetMdrRowToggles(); applyMdrRowFilters(); };
+
     document.getElementById('mdrVolHeader').addEventListener('click', () => {
-      // цикл по клику: все строки → только тома → всё, кроме листов → все строки
+      // цикл по клику: все строки → только тома → всё, кроме листов → все строки (фильтры остаются)
       if (mdrNoSheets){ mdrNoSheets = false; }
       else if (mdrVolumesOnly){ mdrVolumesOnly = false; mdrNoSheets = true; }
       else { mdrVolumesOnly = true; }
-      mdrFilterResponsible = ''; mdrFilterRevision = null;
-      if (mdrVolumesOnly || mdrNoSheets){ mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; } // фильтры взаимоисключающие
-      resetMdrRowToggles();
-      applyMdrRowFilters();
+      refreshMdr();
     });
 
     document.getElementById('mdrPosHeader').addEventListener('click', (e) => {
-      e.stopPropagation(); // иначе этот же клик долетает до document и document→hideContextMenu
-      // тут же закрывает список, который мы открываем ниже
-      if (mdrFilterPositionId){
-        // уже показываем одну позицию — повторный клик по заголовку возвращает все строки
-        mdrFilterPositionId = '';
-        resetMdrRowToggles();
-        applyMdrRowFilters();
-        return;
-      }
       const list = sortedPositions();
       if (!list.length) return alert('Позиции ещё не добавлены — см. вкладку «Позиции по ГП».');
-      showContextMenu(e.clientX, e.clientY, list.map(p => ({
-        label: positionLabel(p),
-        onClick: () => {
-          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterResponsible = ''; mdrFilterRevision = null; mdrFilterDisciplineCode = '';
-          mdrFilterPositionId = p.id;
-          resetMdrRowToggles();
-          applyMdrRowFilters();
-        },
-      })));
+      showMdrFilterMenu(e, 'pos', mdrFilterPositionId, list.map(p => ({ value: p.id, label: positionLabel(p) })), (v) => {
+        mdrFilterPositionId = v || '';
+        refreshMdr();
+      });
     });
 
     document.getElementById('mdrDesigHeader').addEventListener('click', (e) => {
-      e.stopPropagation(); // см. комментарий у mdrPosHeader выше
-      if (mdrFilterDisciplineCode){
-        mdrFilterDisciplineCode = '';
-        resetMdrRowToggles();
-        applyMdrRowFilters();
-        return;
-      }
       const list = sortedDisciplines().filter(d => d.code);
       if (!list.length) return alert('Разделы ещё не добавлены — см. вкладку «Проект».');
-      showContextMenu(e.clientX, e.clientY, list.map(d => ({
-        label: `${d.code} — ${d.name_ru || '(без названия)'}`,
-        onClick: () => {
-          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterResponsible = ''; mdrFilterRevision = null; mdrFilterPositionId = '';
-          mdrFilterDisciplineCode = d.code;
-          resetMdrRowToggles();
-          applyMdrRowFilters();
-        },
-      })));
+      showMdrFilterMenu(e, 'code', mdrFilterDisciplineCode, list.map(d => ({ value: d.code, label: `${d.code} — ${d.name_ru || '(без названия)'}` })), (v) => {
+        mdrFilterDisciplineCode = v || '';
+        refreshMdr();
+      });
     });
 
     document.getElementById('mdrRespHeader').addEventListener('click', (e) => {
-      e.stopPropagation(); // см. комментарий у mdrPosHeader выше
-      if (mdrFilterResponsible){
-        mdrFilterResponsible = ''; mdrFilterRevision = null;
-        resetMdrRowToggles();
-        applyMdrRowFilters();
-        return;
-      }
-      const names = [...new Set([...document.querySelectorAll('tr.mdr-disc-row')].map(tr => tr.dataset.resp).filter(Boolean))]
+      // исполнители — только те, кто есть среди разделов, прошедших остальные фильтры (позиция/раздел)
+      const names = [...new Set([...document.querySelectorAll('tr.mdr-disc-row')]
+        .filter(tr => mdrAlbumPasses(tr, 'resp')).map(tr => tr.dataset.resp).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, 'ru'));
+      if (mdrFilterResponsible && !names.includes(mdrFilterResponsible)) names.push(mdrFilterResponsible);
       if (!names.length) return alert('Ответственные исполнители ещё не назначены — см. вкладку «Создание разделов».');
-      showContextMenu(e.clientX, e.clientY, names.map(n => ({
-        label: n,
-        onClick: () => {
-          mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterPositionId = ''; mdrFilterDisciplineCode = '';
-          mdrFilterResponsible = n; mdrFilterRevision = null;
-          resetMdrRowToggles();
-          applyMdrRowFilters();
-        },
-      })));
+      showMdrFilterMenu(e, 'resp', mdrFilterResponsible, names.map(n => ({ value: n, label: n })), (v) => {
+        mdrFilterResponsible = v || '';
+        refreshMdr();
+      });
     });
 
     document.getElementById('mdrRevHeader').addEventListener('click', () => {
-      // цикл по клику: все строки → ревизия 1 → ревизия 2 → … → (без ревизии) → все строки
-      const revs = [...new Set([...document.querySelectorAll('tr.mdr-doc-row')].map(tr => tr.dataset.rev))]
+      // цикл по клику: все → ревизия 1 → ревизия 2 → … → (без ревизии) → все;
+      // ревизии берутся из листов, прошедших остальные фильтры (например, только выбранной позиции)
+      const revs = [...new Set([...document.querySelectorAll('tr.mdr-doc-row')]
+        .filter(tr => mdrAlbumPasses(tr)).map(tr => tr.dataset.rev))]
         .sort((a, b) => a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'ru', { numeric: true }));
-      if (!revs.length) return alert('Листов пока нет — см. вкладку «Состав разделов».');
-      const next = mdrFilterRevision === null ? 0 : revs.indexOf(mdrFilterRevision) + 1;
-      mdrVolumesOnly = false; mdrNoSheets = false; mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; mdrFilterResponsible = '';
-      mdrFilterRevision = next >= revs.length || next < 0 ? null : revs[next];
-      resetMdrRowToggles();
-      applyMdrRowFilters();
+      if (!revs.length) return alert('Листов, подходящих под выбранные фильтры, нет.');
+      const idx = mdrFilterRevision === null ? -1 : revs.indexOf(mdrFilterRevision);
+      const next = (mdrFilterRevision !== null && idx < 0) ? 0 : idx + 1;
+      mdrFilterRevision = next >= revs.length ? null : revs[next];
+      refreshMdr();
+    });
+
+    document.getElementById('btnResetMdrFilters').addEventListener('click', () => {
+      resetAllMdrFilters();
+      refreshMdr();
     });
 
     applyMdrRowFilters();
