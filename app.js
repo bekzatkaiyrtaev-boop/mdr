@@ -1224,7 +1224,7 @@ function renderSheetCompDetail(){
         <colgroup>
           <col style="width:240px;"><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col style="width:180px;"><col style="width:180px;"><col style="width:140px;"><col style="width:150px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
         </colgroup>
-        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col">Обозначение заказчика</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия заказчика</th><th></th></tr>
+        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
         ${rows.length ? rows.map(s => `
           <tr data-id="${s.id}">
             <td>
@@ -1904,8 +1904,8 @@ function buildMdrExcelHtml(forPrint = false){
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Примечание','Remarks'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ответственный исполнитель','Responsible Person'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ревизия','Revision'))}</th>
-        <th style="${XL_TD}background:#ffe599;">${esc(t('Обозначение заказчика','Customer Document No.'))}</th>
-        <th style="${XL_TD}background:#ffe599;">${esc(t('Ревизия заказчика','Customer Revision'))}</th>
+        <th style="${XL_TD}background:#ffe599;">${esc(t('Обозначение Hebei','Hebei Document No.'))}</th>
+        <th style="${XL_TD}background:#ffe599;">${esc(t('Ревизия Hebei','Hebei Revision'))}</th>
       </tr>
 `;
   if (forPrint){
@@ -2033,8 +2033,8 @@ function renderMdrTab(){
           <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя (фильтр работает вместе с остальными)"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Responsible Person</span><span id="mdrRespBadge" style="color:var(--accent);font-weight:700;"></span></th>
           <th id="mdrRevHeader" style="cursor:pointer;user-select:none;" title="Клик — ревизия по кругу: каждый клик — следующая ревизия, после последней — все (фильтр работает вместе с остальными)"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span><span id="mdrRevBadge" style="color:var(--accent);font-weight:700;"></span></th>
           <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Edition</span></th>
-          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение заказчика</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Customer Document No.</span></th>
-          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия заказчика</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Customer Revision</span></th>
+          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Document No.</span></th>
+          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Revision</span></th>
         </tr>
       </thead>
       <tbody>
