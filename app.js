@@ -1913,6 +1913,8 @@ function buildMdrExcelHtml(forPrint = false){
       table.mdr{table-layout:fixed;}
       table.mdr td,table.mdr th{word-break:break-word;overflow-wrap:anywhere;}
       thead{display:table-header-group;}
+      /* шапка столбцов выше обычной строки (inline-стиль ячеек перебиваем через !important) */
+      thead th{height:16mm;padding:8px 6px !important;font-size:12px !important;vertical-align:middle;}
       tr{break-inside:avoid;}
     </style></head><body>
     <table>${infoRows}</table>
