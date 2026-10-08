@@ -436,7 +436,7 @@ function renderProjectTab(){
     </div>
   </div>
   <div class="card">
-    <div class="card-header">
+    <div class="card-header" id="discCardHeader" style="cursor:pointer;user-select:none;" title="Клик — свернуть все группы разделов, повторный клик — развернуть">
       <span class="title">Разделы и исполнители</span>
       <div style="display:flex;gap:8px;">
         <button class="btn secondary small" id="btnAddDisciplineHeader" title="Заголовок группы (напр. «Электрическая часть»), под которым можно свернуть/развернуть входящие в неё разделы">+ Заголовок</button>
@@ -2443,6 +2443,19 @@ function bindTabEvents(id){
       document.getElementById('tabContent').innerHTML = renderProjectTab();
       bindTabEvents('project');
     }));
+
+    // клик по шапке карточки "Разделы и исполнители" — свернуть все группы, повторный — развернуть все
+    const discCardHeader = document.getElementById('discCardHeader');
+    if (discCardHeader) discCardHeader.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return; // кнопки "+ Заголовок" / "+ Добавить раздел" — своё действие
+      const headerIds = disciplines.filter(d => d.is_header).map(d => d.id);
+      if (!headerIds.length) return;
+      const allCollapsed = headerIds.every(id => collapsedDisciplineGroups.has(id));
+      if (allCollapsed) collapsedDisciplineGroups.clear();
+      else headerIds.forEach(id => collapsedDisciplineGroups.add(id));
+      document.getElementById('tabContent').innerHTML = renderProjectTab();
+      bindTabEvents('project');
+    });
 
     document.querySelectorAll('.hNameRu, .hNameEn').forEach(el => el.addEventListener('change', async () => {
       const id = el.dataset.id;
