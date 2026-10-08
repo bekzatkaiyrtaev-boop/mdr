@@ -1224,7 +1224,7 @@ function renderSheetCompDetail(){
         <colgroup>
           <col style="width:240px;"><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col style="width:180px;"><col style="width:180px;"><col style="width:140px;"><col style="width:150px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
         </colgroup>
-        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
+        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
         ${rows.length ? rows.map(s => `
           <tr data-id="${s.id}">
             <td>
@@ -1282,12 +1282,12 @@ async function insertSheetAdjacent(targetSheetId, dir){
   document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
   bindSheetCompDetailEvents();
 }
-// двойной клик по заголовку столбца в "Состав разделов" — заполнить весь столбец значением
+// клик по заголовку столбца в "Состав разделов" — заполнить весь столбец значением
 // из первой строки (по аналогии с "протянуть вниз" в Excel), одним пакетным запросом
 function bindFillDownHeader(headerId, cellSelector, dbColumn, getValue){
   const header = document.getElementById(headerId);
   if (!header) return;
-  header.addEventListener('dblclick', async () => {
+  header.addEventListener('click', async () => {
     const cells = [...document.querySelectorAll(`#sheetCompDetail ${cellSelector}`)];
     if (cells.length < 2 || cells[0].disabled) return;
     const value = getValue(cells[0]);
