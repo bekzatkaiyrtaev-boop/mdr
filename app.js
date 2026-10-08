@@ -2326,9 +2326,28 @@ function codesByEmployee(){
   });
   return map;
 }
+// сколько разделов (альбомов) и листов заполнено у каждого сотрудника: считаем альбомы, где он
+// ответственный (колонка "Ответственный исполнитель" в MDR), и листы в них; альбомы без листов не учитываются
+function filledStatsByEmployeeName(){
+  const sheetsByPd = new Map();
+  sheets.forEach(s => sheetsByPd.set(s.position_discipline_id, (sheetsByPd.get(s.position_discipline_id) || 0) + 1));
+  const stats = new Map(); // имя (lowercase) → { albums, sheets }
+  positionDisciplines.forEach(pd => {
+    const n = sheetsByPd.get(pd.id) || 0;
+    if (!n) return;
+    const d = disciplines.find(x => x.code === pd.discipline_code);
+    const name = resolvedResponsibleName(pd, d).trim().toLowerCase();
+    if (!name) return;
+    const st = stats.get(name) || { albums: 0, sheets: 0 };
+    st.albums += 1; st.sheets += n;
+    stats.set(name, st);
+  });
+  return stats;
+}
 function renderUsersTab(){
   const list = sortedEmployees();
   const codes = codesByEmployee();
+  const filled = filledStatsByEmployeeName();
   return `
   <div class="card">
     <div class="card-header">
@@ -2337,12 +2356,13 @@ function renderUsersTab(){
     </div>
     <div class="card-body" style="padding:0;">
       <table style="table-layout:fixed;">
-        <colgroup><col><col style="width:240px;"><col style="width:160px;"><col style="width:180px;"><col style="width:44px;"></colgroup>
-        <tr><th>Имя</th><th>Email</th><th>Разделы</th><th>Роль</th><th></th></tr>
+        <colgroup><col><col style="width:240px;"><col style="width:160px;"><col style="width:180px;"><col style="width:150px;"><col style="width:44px;"></colgroup>
+        <tr><th>Имя</th><th>Email</th><th>Разделы</th><th>Роль</th><th title="Сколько разделов (альбомов) и листов заполнено в «Составе разделов» там, где сотрудник ответственный. Разделы без листов не учитываются">Заполнено (разд. / листов)</th><th></th></tr>
         ${list.map(e => {
           const registered = allProfiles.some(p => (p.email||'').toLowerCase() === (e.email||'').toLowerCase());
           const empCodes = [...(codes[e.id] || [])];
           const isAdmin = isAdminEmail(e.email);
+          const st = filled.get((e.full_name || '').trim().toLowerCase());
           return `
           <tr data-id="${e.id}">
             <td><input type="text" class="text-like eName" data-id="${e.id}" value="${esc(e.full_name||'')}" placeholder="ФИО" style="width:100%;"></td>
@@ -2356,9 +2376,10 @@ function renderUsersTab(){
                   </select>`}
               ${!registered ? `<div class="muted" style="font-size:11px;margin-top:2px;">ещё не зарегистрирован</div>` : ''}
             </td>
+            <td style="font-size:12px;">${st ? `<b>${st.albums}</b> / <b>${st.sheets}</b>` : '<span class="muted">—</span>'}</td>
             <td>${isAdmin ? '' : `<button class="icon-btn btn-del-employee" data-id="${e.id}" title="Удалить сотрудника">✕</button>`}</td>
           </tr>`;
-        }).join('') || `<tr><td colspan="5" class="muted">Сотрудники пока не добавлены — нажмите «+ Добавить сотрудника»</td></tr>`}
+        }).join('') || `<tr><td colspan="6" class="muted">Сотрудники пока не добавлены — нажмите «+ Добавить сотрудника»</td></tr>`}
       </table>
       <p class="muted" style="padding:12px 16px;font-size:12px;">
         Исполнителей на конкретные разделы назначают во вкладке «Проект» — «Разделы и
