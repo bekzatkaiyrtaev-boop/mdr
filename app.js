@@ -22,11 +22,11 @@ let activeTab = null;
 let collapsedDisciplineGroups = new Set();
 
 const STATUS_LABELS = {
-  not_started:  { ru:'Не начат',            en:'Not started' },
-  in_progress:  { ru:'В работе',             en:'In progress' },
-  issued:       { ru:'На согласовании',      en:'Issued for approval' },
-  approved:     { ru:'Согласован',           en:'Approved' },
-  construction: { ru:'На стройплощадке',     en:'At construction site' },
+  not_started:     { ru:'Не начат',                                        en:'Not started' },
+  received_hbec:   { ru:'Получен от HBEC',                                 en:'Received from HBEC' },
+  returned_hbec:   { ru:'Возвращен на доработку HBEC',                     en:'Returned by HBEC for rework' },
+  sent_electronic: { ru:'Электронная версия отправлена на площадку',       en:'Electronic version sent to site' },
+  sent_paper:      { ru:'Бумажная версия направлена на площадку',          en:'Hard copy sent to site' },
 };
 const ASSIGNMENT_STATUS_LABELS = {
   not_started: { ru:'Не начато',  en:'Not started' },
@@ -1209,9 +1209,9 @@ function renderSheetCompDetail(){
       </div>
     </div>
     <div class="card-body" style="padding:0;overflow-x:auto;">
-      <table style="table-layout:fixed;min-width:1544px;">
+      <table style="table-layout:fixed;min-width:1684px;">
         <colgroup>
-          <col style="width:240px;"><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col style="width:180px;"><col style="width:180px;"><col style="width:140px;"><col style="width:150px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
+          <col style="width:240px;"><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col style="width:180px;"><col style="width:180px;"><col style="width:140px;"><col style="width:290px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
         </colgroup>
         <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th id="scHeaderComment" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
         ${rows.length ? rows.map(s => `
