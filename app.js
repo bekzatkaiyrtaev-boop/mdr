@@ -35,12 +35,14 @@ const ASSIGNMENT_STATUS_LABELS = {
   done:        { ru:'Выполнено',  en:'Done' },
   cancelled:   { ru:'Отменено',   en:'Cancelled' },
 };
-const ROLE_LABELS = { gip:'ГИП', gip_assistant:'Помощник ГИПа', engineer:'Инженер' };
+const ROLE_LABELS = { gip:'ГИП', gip_assistant:'Помощник ГИПа', engineer:'Инженер', viewer:'Наблюдатель' };
 // закреплённый администратор — всегда полные права, роль нельзя сменить никому (см. также
 // current_user_role()/protect_profile_privileges в схеме БД — там та же проверка на бэкенде)
 const ADMIN_EMAIL = 'bekzat.kaiyrtaev@gmail.com';
 function isAdminEmail(email){ return (email||'').trim().toLowerCase() === ADMIN_EMAIL; }
 // ГИП и помощник ГИПа — полный доступ (наравне с ГИП, кроме явных ограничений в RLS)
+// «Наблюдатель» — гость: видит только вкладку MDR, только чтение (запись запрещена и в БД: ни одна политика записи не пускает эту роль)
+function isViewer(){ return profile.role === 'viewer' && !isAdminEmail(profile.email); }
 function isFullAccess(){ return profile.role === 'gip' || profile.role === 'gip_assistant' || isAdminEmail(profile.email); }
 const DEFAULT_VOLUMES = [
   { number:'1', name_ru:'ПАСПОРТ ПРОЕКТА', name_en:'DETAIL DESIGN PASSPORT', is_positions_root:false },
@@ -204,6 +206,9 @@ async function loadAll(){
 // ---------------- tabs ----------------
 function buildTabs(){
   const tabs = [];
+  if (isViewer()){
+    tabs.push(['mdr', 'MDR']);
+  } else {
   if (isFullAccess()) tabs.push(['project', 'Проект']);
   tabs.push(['posgp', 'Позиции по ГП']);
   tabs.push(['sections', 'Создание разделов']);
@@ -211,6 +216,7 @@ function buildTabs(){
   tabs.push(['mdr', 'MDR']);
   tabs.push(['assignments', 'Поручения']);
   if (isFullAccess()) tabs.push(['users', 'Пользователи']);
+  }
 
   const tabsEl = document.getElementById('tabs');
   tabsEl.innerHTML = tabs.map(([id,label]) => {
@@ -228,6 +234,7 @@ function switchTab(id){
 }
 
 function renderTab(id){
+  if (isViewer()) id = 'mdr'; // наблюдателю доступна только вкладка MDR
   const c = document.getElementById('tabContent');
   if (id === 'project') c.innerHTML = renderProjectTab();
   else if (id === 'posgp') c.innerHTML = renderPositionsTab();
@@ -237,6 +244,13 @@ function renderTab(id){
   else if (id === 'assignments') c.innerHTML = renderAssignmentsTab();
   else if (id === 'users') c.innerHTML = renderUsersTab();
   bindTabEvents(id);
+  if (isViewer()) applyViewerReadOnly();
+}
+// режим «только чтение» для наблюдателя: поля не редактируются, кнопки изменения скрыты
+function applyViewerReadOnly(){
+  document.querySelectorAll('#tabContent input, #tabContent textarea').forEach(el => { el.readOnly = true; el.tabIndex = -1; });
+  document.querySelectorAll('#tabContent select').forEach(el => { el.disabled = true; });
+  document.querySelectorAll('#btnAddMdrRow, #btnTranslateMdr, .btn-del-volume').forEach(el => el.remove());
 }
 
 // ---------------- вкладка "Проект" (ГИП) ----------------

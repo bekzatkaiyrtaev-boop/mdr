@@ -10,7 +10,7 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   full_name text,
-  role text not null default 'engineer' check (role in ('gip','gip_assistant','engineer')),
+  role text not null default 'engineer' check (role in ('gip','gip_assistant','engineer','viewer')),
   created_at timestamptz not null default now()
 );
 
@@ -115,7 +115,7 @@ create table public.employees (
   id uuid primary key default gen_random_uuid(),
   full_name text not null,
   email text not null,
-  role text not null default 'engineer' check (role in ('gip','gip_assistant','engineer')),
+  role text not null default 'engineer' check (role in ('gip','gip_assistant','engineer','viewer')),
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now()
 );
