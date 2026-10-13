@@ -238,12 +238,14 @@ create table public.positions (
 alter table public.positions enable row level security;
 
 create policy "positions_select" on public.positions for select using (true);
+-- права на позиции: ГИП, помощник ГИПа и исполнитель раздела ГП/ГТ (генпланист) — см. migration_030
 create policy "positions_insert" on public.positions for insert
-  with check (public.current_user_role() in ('gip','gip_assistant'));
+  with check (public.current_user_role() in ('gip','gip_assistant') or public.is_genplan_user());
 create policy "positions_update" on public.positions for update
-  using (public.current_user_role() in ('gip','gip_assistant'));
+  using (public.current_user_role() in ('gip','gip_assistant') or public.is_genplan_user())
+  with check (public.current_user_role() in ('gip','gip_assistant') or public.is_genplan_user());
 create policy "positions_delete" on public.positions for delete
-  using (public.current_user_role() in ('gip','gip_assistant'));
+  using (public.current_user_role() in ('gip','gip_assistant') or public.is_genplan_user());
 
 -- ---------- альбомы в позиции ИЛИ прямо в томе (задаёт ГИП/помощник ГИПа) ----------
 -- один "раздел" (public.disciplines, напр. КЖ) может иметь несколько альбомов
