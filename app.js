@@ -463,8 +463,14 @@ function positionLabel(p){
   const name = t(p.name_ru, p.name_en);
   return `${p.position_code ? p.position_code+' ' : ''}${name || '(без названия)'}`;
 }
+// позиции всегда упорядочены по "№ по ГП" (естественная сортировка: 2 < 10, 14.1 после 14);
+// позиции без номера — в конце, при равенстве номеров — по sort_order
 function sortedPositions(){
-  return [...positions].sort((a,b)=>a.sort_order-b.sort_order);
+  return [...positions].sort((a,b) => {
+    const ca = (a.position_code || '').trim(), cb = (b.position_code || '').trim();
+    if (!ca !== !cb) return ca ? -1 : 1;
+    return ca.localeCompare(cb, 'ru', { numeric: true }) || a.sort_order - b.sort_order;
+  });
 }
 
 // ---------------- вкладка "Позиции по ГП" ----------------
@@ -478,21 +484,17 @@ function renderPositionsTab(){
     </div>
     <div class="card-body" style="padding:0;">
       <table style="table-layout:fixed;">
-        <colgroup><col style="width:110px;"><col><col style="width:70px;"><col style="width:44px;"></colgroup>
-        <tr><th>№ по ГП</th><th>Наименование позиции</th><th></th><th></th></tr>
-        ${list.map((p, idx) => `
+        <colgroup><col style="width:110px;"><col><col style="width:44px;"></colgroup>
+        <tr><th>№ по ГП</th><th>Наименование позиции</th><th></th></tr>
+        ${list.map((p) => `
           <tr class="pos-gp-row" data-id="${p.id}">
             <td><input type="text" class="text-like mPosCode" data-id="${p.id}" value="${esc(p.position_code||'')}" placeholder="№" style="width:100%;font-weight:700;"></td>
             <td>
               <input type="text" class="text-like mPosNameRu lang-ru" data-id="${p.id}" value="${esc(p.name_ru||'')}" placeholder="наименование не заполнено" style="display:block;width:100%;">
               <input type="text" class="text-like mPosNameEn lang-en" data-id="${p.id}" value="${esc(p.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;color:var(--muted);">
             </td>
-            <td style="white-space:nowrap;">
-              <button class="icon-btn btn-move-position" data-id="${p.id}" data-dir="up" ${idx<=0?'disabled':''}>↑</button>
-              <button class="icon-btn btn-move-position" data-id="${p.id}" data-dir="down" ${idx>=list.length-1?'disabled':''}>↓</button>
-            </td>
             <td><button class="icon-btn btn-del-position" data-id="${p.id}" title="Удалить позицию">✕</button></td>
-          </tr>`).join('') || `<tr><td colspan="4" class="muted">Позиции пока не добавлены — нажмите «+ Добавить позицию»</td></tr>`}
+          </tr>`).join('') || `<tr><td colspan="3" class="muted">Позиции пока не добавлены — нажмите «+ Добавить позицию»</td></tr>`}
       </table>
     </div>
   </div>`;
@@ -574,8 +576,8 @@ function renderStandaloneVolumeDetail(){
     </div>
   </div>`;
 }
-// правка позиций (код/наименование/перемещение/удаление) — общая логика для вкладок "Позиции по ГП" и "MDR",
-// т.к. обе рисуют строки с одинаковыми классами .mPosCode/.mPosNameRu/.mPosNameEn/.btn-move-position/.btn-del-position
+// правка позиций (код/наименование/удаление) — общая логика для вкладок "Позиции по ГП" и "MDR",
+// т.к. обе рисуют строки с одинаковыми классами .mPosCode/.mPosNameRu/.mPosNameEn/.btn-del-position
 function bindPositionEditEvents(){
   document.querySelectorAll('.mPosCode, .mPosNameRu, .mPosNameEn').forEach(el => el.addEventListener('change', async () => {
     const id2 = el.dataset.id;
@@ -590,19 +592,6 @@ function bindPositionEditEvents(){
       if (translated){ await dbWrite(sb.from('positions').update({ name_en: translated }).eq('id', id2)); p.name_en = translated; }
     }
     // номер позиции/имя влияют на нумерацию и порядок отображения — перерисовываем целиком
-    renderTab(activeTab);
-  }));
-
-  document.querySelectorAll('.btn-move-position').forEach(b => b.addEventListener('click', async () => {
-    const list = sortedPositions();
-    const idx = list.findIndex(x => x.id === b.dataset.id);
-    const swapIdx = b.dataset.dir === 'up' ? idx - 1 : idx + 1;
-    if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return;
-    const reordered = [...list];
-    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
-    await Promise.all(reordered.map((row, i) => dbWrite(sb.from('positions').update({ sort_order: i }).eq('id', row.id))));
-    const { data } = await sb.from('positions').select('*').order('sort_order');
-    positions = data || [];
     renderTab(activeTab);
   }));
 
