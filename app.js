@@ -1781,7 +1781,6 @@ function discSheetRowsHtml(discs, owner){
         <td>${esc(pd.note||'')}</td>
         <td title="Ответственный задаётся во вкладке «Создание разделов»">${esc(responsibleName)}</td>
         <td></td>
-        <td class="mdr-edition-cell"></td>
         <td></td>
         <td></td>
       </tr>`);
@@ -1794,7 +1793,6 @@ function discSheetRowsHtml(discs, owner){
         <td>${esc(s.comment||'')}</td>
         <td></td>
         <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.revision||'')}</td>
-        <td class="mdr-edition-cell"></td>
         <td class="muted cust-col" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_designation||'')}</td>
         <td class="muted cust-col" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_revision||'')}</td>
       </tr>`);
@@ -1957,7 +1955,7 @@ function renderMdrTab(){
           <button class="mdr-toggle btn-toggle-pos" data-pos="${p.id}">▼</button>
           ${esc(p.position_code || '—')}
         </td>
-        <td colspan="7" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
+        <td colspan="6" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
           ${(p.name_ru || p.name_en) ? esc(t(p.name_ru, p.name_en)) : '<span style="opacity:.6;">не заполнено — см. «Позиции по ГП»</span>'}
         </td>
       </tr>`);
@@ -1972,7 +1970,7 @@ function renderMdrTab(){
       <tr class="mdr-vol-row" data-volid="${v.id}" ${v.is_positions_root ? 'data-root="1"' : ''}>
         <td><input type="text" class="text-like volNumber" data-id="${v.id}" value="${esc(v.number||'')}" placeholder="№" style="width:100%;font-weight:700;"></td>
         <td>${volDiscs.length ? `<button class="mdr-toggle btn-toggle-vol" data-vol="${v.id}">▼</button>` : ''}</td>
-        <td colspan="6">
+        <td colspan="5">
           <input type="text" class="text-like volNameRu lang-ru" data-id="${v.id}" value="${esc(v.name_ru||'')}" placeholder="наименование не заполнено" style="display:block;width:100%;font-weight:700;">
           <input type="text" class="text-like volNameEn lang-en" data-id="${v.id}" value="${esc(v.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;">
         </td>
@@ -2011,7 +2009,7 @@ function renderMdrTab(){
   <div class="card" id="mdrPrintable" style="padding:0;">
     <table style="table-layout:fixed;">
       <colgroup>
-        <col style="width:90px;"><col style="width:70px;"><col><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col id="mdrEditionCol" style="width:110px;"><col style="width:170px;"><col style="width:110px;">
+        <col style="width:90px;"><col style="width:70px;"><col><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col style="width:170px;"><col style="width:110px;">
       </colgroup>
       <thead>
         <tr>
@@ -2021,13 +2019,12 @@ function renderMdrTab(){
           <th><span class="lang-ru">Примечание</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Remarks</span></th>
           <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя (фильтр работает вместе с остальными)"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Responsible Person</span><span id="mdrRespBadge" style="color:var(--accent);font-weight:700;"></span></th>
           <th id="mdrRevHeader" style="cursor:pointer;user-select:none;" title="Клик — ревизия по кругу: каждый клик — следующая ревизия, после последней — все (фильтр работает вместе с остальными)"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span><span id="mdrRevBadge" style="color:var(--accent);font-weight:700;"></span></th>
-          <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Edition</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Document No.</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Revision</span></th>
         </tr>
       </thead>
       <tbody>
-        ${bodyRows.join('') || `<tr><td colspan="9" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
+        ${bodyRows.join('') || `<tr><td colspan="8" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
       </tbody>
     </table>
     <datalist id="disciplineNameSuggestions">
@@ -2698,14 +2695,6 @@ function bindTabEvents(id){
       await dbWrite(sb.from('sheets').update({ manual_number }).eq('id', id2));
       const s = sheets.find(x => x.id === id2);
       if (s) s.manual_number = manual_number;
-    }));
-
-    document.querySelectorAll('.sMdrEdition').forEach(el => el.addEventListener('change', async () => {
-      const id2 = el.dataset.id;
-      const edition = el.value || null;
-      await dbWrite(sb.from('sheets').update({ edition }).eq('id', id2));
-      const s = sheets.find(x => x.id === id2);
-      if (s) s.edition = edition;
     }));
 
     document.querySelectorAll('.btn-toggle-pos').forEach(b => b.addEventListener('click', () => {
