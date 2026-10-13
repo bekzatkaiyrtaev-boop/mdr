@@ -1210,11 +1210,11 @@ function renderSheetCompDetail(){
       </div>
     </div>
     <div class="card-body" style="padding:0;overflow-x:auto;">
-      <table style="table-layout:fixed;min-width:1684px;">
+      <table style="table-layout:fixed;min-width:1504px;">
         <colgroup>
-          <col style="width:240px;"><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col style="width:180px;"><col style="width:180px;"><col style="width:140px;"><col style="width:290px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
+          <col style="width:240px;"><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col style="width:320px;"><col style="width:290px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
         </colgroup>
-        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th id="scHeaderComment" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
+        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th id="scHeaderComment" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Примечания</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
         ${rows.length ? rows.map(s => `
           <tr data-id="${s.id}">
             <td>
@@ -1228,8 +1228,6 @@ function renderSheetCompDetail(){
             <td><input type="text" class="text-like sRevision" data-id="${s.id}" value="${esc(s.revision||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td class="muted" style="font-family:var(--mono);font-size:12px;" title="Считается автоматически: Номер договора-Номер по ГП-Шифр альбома">${esc(designation)}</td>
             <td><input type="text" class="text-like sComment" data-id="${s.id}" value="${esc(s.comment||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
-            <td><input type="text" class="text-like sReply" data-id="${s.id}" value="${esc(s.reply||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
-            <td><input type="text" class="text-like sCheckedBy" data-id="${s.id}" value="${esc(s.checked_by_name||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td>
               <select class="sStatus" data-id="${s.id}" ${canEdit?'':'disabled'}>
                 ${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${s.status===k?'selected':''}>${v.ru}</option>`).join('')}
@@ -1238,7 +1236,7 @@ function renderSheetCompDetail(){
             <td class="cust-col"><input type="text" class="text-like sCustomerDesignation" data-id="${s.id}" value="${esc(s.customer_designation||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td class="cust-col"><input type="text" class="text-like sCustomerRevision" data-id="${s.id}" value="${esc(s.customer_revision||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td>${canEdit ? `<button class="icon-btn btn-del-sheet" data-id="${s.id}" title="Удалить лист">✕</button>` : ''}</td>
-          </tr>`).join('') : `<tr><td colspan="11" class="muted">Листы ещё не добавлены</td></tr>`}
+          </tr>`).join('') : `<tr><td colspan="9" class="muted">Листы ещё не добавлены</td></tr>`}
       </table>
       <datalist id="sheetFormatSuggestions">
         ${SHEET_FORMAT_SUGGESTIONS.map(f => `<option value="${f}">`).join('')}
@@ -1352,7 +1350,7 @@ function bindSheetCompDetailEvents(){
     bindSheetCompDetailEvents();
   });
 
-  document.querySelectorAll('.sName, .sNameEn, .sFormat, .sRevision, .sComment, .sReply, .sCheckedBy, .sCustomerDesignation, .sCustomerRevision').forEach(el => el.addEventListener('change', async () => {
+  document.querySelectorAll('.sName, .sNameEn, .sFormat, .sRevision, .sComment, .sCustomerDesignation, .sCustomerRevision').forEach(el => el.addEventListener('change', async () => {
     const id = el.dataset.id;
     const payload = {
       name_ru: document.querySelector(`.sName[data-id="${id}"]`).value.trim() || null,
@@ -1360,8 +1358,6 @@ function bindSheetCompDetailEvents(){
       format: document.querySelector(`.sFormat[data-id="${id}"]`).value.trim() || null,
       revision: document.querySelector(`.sRevision[data-id="${id}"]`).value.trim() || null,
       comment: document.querySelector(`.sComment[data-id="${id}"]`).value.trim() || null,
-      reply: document.querySelector(`.sReply[data-id="${id}"]`).value.trim() || null,
-      checked_by_name: document.querySelector(`.sCheckedBy[data-id="${id}"]`).value.trim() || null,
       customer_designation: document.querySelector(`.sCustomerDesignation[data-id="${id}"]`).value.trim() || null,
       customer_revision: document.querySelector(`.sCustomerRevision[data-id="${id}"]`).value.trim() || null,
       updated_at: new Date().toISOString(),
