@@ -28,6 +28,7 @@ const STATUS_LABELS = {
   sent_electronic: { ru:'Электронная версия отправлена на площадку',       en:'Electronic version sent to site' },
   sent_paper:      { ru:'Бумажная версия направлена на площадку',          en:'Hard copy sent to site' },
 };
+const sheetStatusLabel = (st) => { const l = STATUS_LABELS[st]; return l ? t(l.ru, l.en) : ''; };
 const ASSIGNMENT_STATUS_LABELS = {
   not_started: { ru:'Не начато',  en:'Not started' },
   in_progress: { ru:'В работе',   en:'In progress' },
@@ -1784,6 +1785,7 @@ function discSheetRowsHtml(discs, owner){
         <td></td>
         <td></td>
         <td></td>
+        <td></td>
       </tr>`);
     sheetRows.forEach((s) => {
       rows.push(`
@@ -1794,6 +1796,7 @@ function discSheetRowsHtml(discs, owner){
         <td>${esc(s.comment||'')}</td>
         <td></td>
         <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.revision||'')}</td>
+        <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(sheetStatusLabel(s.status))}</td>
         <td class="muted cust-col" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_designation||'')}</td>
         <td class="muted cust-col" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_revision||'')}</td>
       </tr>`);
@@ -1824,6 +1827,7 @@ function mdrExcelDiscSheetRows(discs, owner){
         <td style="${XL_TD}background:#ead1dc;"></td>
         <td style="${XL_TD}background:#ead1dc;"></td>
         <td style="${XL_TD}background:#ead1dc;"></td>
+        <td style="${XL_TD}background:#ead1dc;"></td>
       </tr>`);
     sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id)).forEach(s => {
       rows.push(`
@@ -1834,6 +1838,7 @@ function mdrExcelDiscSheetRows(discs, owner){
         <td style="${XL_TD}">${esc(s.comment||'')}</td>
         <td style="${XL_TD}"></td>
         <td style="${XL_TD}">${esc(s.revision||'')}</td>
+        <td style="${XL_TD}">${esc(sheetStatusLabel(s.status))}</td>
         <td style="${XL_TD}background:#fff2cc;">${esc(s.customer_designation||'')}</td>
         <td style="${XL_TD}background:#fff2cc;">${esc(s.customer_revision||'')}</td>
       </tr>`);
@@ -1851,7 +1856,7 @@ function buildMdrExcelHtml(forPrint = false){
       <tr>
         <td style="${XL_TD}background:#d9d2e9;font-weight:700;"></td>
         <td style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc(pos.position_code||'—')}</td>
-        <td colspan="6" style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc((pos.name_ru||pos.name_en) ? t(pos.name_ru,pos.name_en) : '')}</td>
+        <td colspan="7" style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc((pos.name_ru||pos.name_en) ? t(pos.name_ru,pos.name_en) : '')}</td>
       </tr>`);
     positionRows.push(...mdrExcelDiscSheetRows(discs, { pos: pos.id }));
   });
@@ -1864,7 +1869,7 @@ function buildMdrExcelHtml(forPrint = false){
       <tr>
         <td style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(v.number||'')}</td>
         <td style="${XL_TD}background:#b4a7d6;font-weight:700;"></td>
-        <td colspan="6" style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(t(v.name_ru,v.name_en)||'')}</td>
+        <td colspan="7" style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(t(v.name_ru,v.name_en)||'')}</td>
       </tr>`);
     if (v.is_positions_root){
       bodyRows.push(...positionRows);
@@ -1876,13 +1881,13 @@ function buildMdrExcelHtml(forPrint = false){
   if (!positionRowsPlaced) bodyRows.push(...positionRows);
 
   const infoRows = `
-      <tr><td colspan="8" style="font-weight:700;font-size:14px;padding:4px 6px;">${esc(t('СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)','MASTER DOCUMENT REGISTER (MDR)'))}</td></tr>
-      <tr><td colspan="8"></td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Номер договора','Contract No.'))}</td><td colspan="7" style="padding:2px 6px;">${esc(p.contract_number||'')}</td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Наименование','Project Name'))}</td><td colspan="7" style="padding:2px 6px;">${esc(t(p.name_ru,p.name_en)||'')}</td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Организация','Organization'))}</td><td colspan="7" style="padding:2px 6px;">${esc(t(p.company_name_ru,p.company_name_en)||'')}</td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Стадия','Stage'))}</td><td colspan="7" style="padding:2px 6px;">${esc(t(p.stage_ru,p.stage_en)||'')}</td></tr>
-      <tr><td colspan="8"></td></tr>
+      <tr><td colspan="9" style="font-weight:700;font-size:14px;padding:4px 6px;">${esc(t('СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)','MASTER DOCUMENT REGISTER (MDR)'))}</td></tr>
+      <tr><td colspan="9"></td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Номер договора','Contract No.'))}</td><td colspan="8" style="padding:2px 6px;">${esc(p.contract_number||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Наименование','Project Name'))}</td><td colspan="8" style="padding:2px 6px;">${esc(t(p.name_ru,p.name_en)||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Организация','Organization'))}</td><td colspan="8" style="padding:2px 6px;">${esc(t(p.company_name_ru,p.company_name_en)||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Стадия','Stage'))}</td><td colspan="8" style="padding:2px 6px;">${esc(t(p.stage_ru,p.stage_en)||'')}</td></tr>
+      <tr><td colspan="9"></td></tr>
 `;
   const headRow = `
       <tr>
@@ -1892,6 +1897,7 @@ function buildMdrExcelHtml(forPrint = false){
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Примечание','Remarks'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ответственный исполнитель','Responsible Person'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ревизия','Revision'))}</th>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Статус','Status'))}</th>
         <th style="${XL_TD}background:#ffe599;">${esc(t('Обозначение Hebei','Hebei Document No.'))}</th>
         <th style="${XL_TD}background:#ffe599;">${esc(t('Ревизия Hebei','Hebei Revision'))}</th>
       </tr>
@@ -1900,7 +1906,7 @@ function buildMdrExcelHtml(forPrint = false){
     // лёгкая статичная версия для печати: без полей ввода и обработчиков, шапка столбцов
     // повторяется на каждой странице; печать из самой страницы MDR (тысячи строк с input)
     // падала с "Out of Memory"
-    const colgroup = '<colgroup><col style="width:6%;"><col style="width:6%;"><col style="width:36%;"><col style="width:12%;"><col style="width:14%;"><col style="width:8%;"><col style="width:10%;"><col style="width:8%;"></colgroup>';
+    const colgroup = '<colgroup><col style="width:5%;"><col style="width:5%;"><col style="width:30%;"><col style="width:10%;"><col style="width:12%;"><col style="width:6%;"><col style="width:12%;"><col style="width:12%;"><col style="width:8%;"></colgroup>';
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>MDR</title>
     <style>
       @page{size:A3 landscape;margin:10mm;}
@@ -1956,7 +1962,7 @@ function renderMdrTab(){
           <button class="mdr-toggle btn-toggle-pos" data-pos="${p.id}">▼</button>
           ${esc(p.position_code || '—')}
         </td>
-        <td colspan="6" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
+        <td colspan="7" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
           ${(p.name_ru || p.name_en) ? esc(t(p.name_ru, p.name_en)) : '<span style="opacity:.6;">не заполнено — см. «Позиции по ГП»</span>'}
         </td>
       </tr>`);
@@ -1971,7 +1977,7 @@ function renderMdrTab(){
       <tr class="mdr-vol-row" data-volid="${v.id}" ${v.is_positions_root ? 'data-root="1"' : ''}>
         <td><input type="text" class="text-like volNumber" data-id="${v.id}" value="${esc(v.number||'')}" placeholder="№" style="width:100%;font-weight:700;"></td>
         <td>${volDiscs.length ? `<button class="mdr-toggle btn-toggle-vol" data-vol="${v.id}">▼</button>` : ''}</td>
-        <td colspan="5">
+        <td colspan="6">
           <input type="text" class="text-like volNameRu lang-ru" data-id="${v.id}" value="${esc(v.name_ru||'')}" placeholder="наименование не заполнено" style="display:block;width:100%;font-weight:700;">
           <input type="text" class="text-like volNameEn lang-en" data-id="${v.id}" value="${esc(v.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;">
         </td>
@@ -2010,7 +2016,7 @@ function renderMdrTab(){
   <div class="card" id="mdrPrintable" style="padding:0;">
     <table style="table-layout:fixed;">
       <colgroup>
-        <col style="width:90px;"><col style="width:70px;"><col><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col style="width:170px;"><col style="width:110px;">
+        <col style="width:90px;"><col style="width:70px;"><col><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col style="width:200px;"><col style="width:170px;"><col style="width:110px;">
       </colgroup>
       <thead>
         <tr>
@@ -2020,12 +2026,13 @@ function renderMdrTab(){
           <th><span class="lang-ru">Примечание</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Remarks</span></th>
           <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя (фильтр работает вместе с остальными)"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Responsible Person</span><span id="mdrRespBadge" style="color:var(--accent);font-weight:700;"></span></th>
           <th id="mdrRevHeader" style="cursor:pointer;user-select:none;" title="Клик — ревизия по кругу: каждый клик — следующая ревизия, после последней — все (фильтр работает вместе с остальными)"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span><span id="mdrRevBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Статус</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Status</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Document No.</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Revision</span></th>
         </tr>
       </thead>
       <tbody>
-        ${bodyRows.join('') || `<tr><td colspan="8" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
+        ${bodyRows.join('') || `<tr><td colspan="9" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
       </tbody>
     </table>
     <datalist id="disciplineNameSuggestions">
