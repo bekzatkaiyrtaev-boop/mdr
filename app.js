@@ -1228,7 +1228,7 @@ function renderSheetCompDetail(){
         <colgroup>
           <col style="width:240px;"><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col style="width:320px;"><col style="width:290px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
         </colgroup>
-        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th id="scHeaderComment" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Примечания</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
+        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th id="scHeaderComment" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Примечания</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col" id="scHeaderCustomerDesignation" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
         ${rows.length ? rows.map(s => `
           <tr data-id="${s.id}">
             <td>
@@ -1464,6 +1464,7 @@ function bindSheetCompDetailEvents(){
   bindFillDownHeader('scHeaderFormat', '.sFormat', 'format', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderComment', '.sComment', 'comment', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderRevision', '.sRevision', 'revision', el => el.value.trim() || null);
+  bindFillDownHeader('scHeaderCustomerDesignation', '.sCustomerDesignation', 'customer_designation', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderCustomerRevision', '.sCustomerRevision', 'customer_revision', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderStatus', '.sStatus', 'status', el => el.value);
 
