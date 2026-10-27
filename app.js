@@ -327,6 +327,12 @@ function employeeName(employeeId){
 function sortedEmployees(){
   return [...employees].sort((a,b) => (a.full_name||'').localeCompare(b.full_name||'', 'ru'));
 }
+// порядок во вкладке «Пользователи»: администратор → ГИП → помощники ГИПа → инженеры → наблюдатели,
+// внутри группы — по алфавиту
+function sortedEmployeesByRole(){
+  const rank = (e) => isAdminEmail(e.email) ? 0 : ({ gip: 1, gip_assistant: 2, engineer: 3, viewer: 4 }[e.role] ?? 3);
+  return [...employees].sort((a, b) => rank(a) - rank(b) || (a.full_name||'').localeCompare(b.full_name||'', 'ru'));
+}
 // то же самое значение, что показывает/редактирует responsibleCellHtml, но просто строкой —
 // для мест, где нужно только прочитать текущего ответственного (напр. колонка в MDR)
 function resolvedResponsibleName(pd, d){
@@ -2350,7 +2356,7 @@ function filledStatsByEmployeeName(){
   return stats;
 }
 function renderUsersTab(){
-  const list = sortedEmployees();
+  const list = sortedEmployeesByRole();
   const codes = codesByEmployee();
   const filled = filledStatsByEmployeeName();
   return `
