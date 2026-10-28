@@ -380,7 +380,7 @@ create table public.sheets (
   checked_by_name text,   -- ФИО проверившего лист
   manual_number text,     -- "Номер тома / номер альбома" — ручное поле, ни на что не влияет
   status text not null default 'not_started'
-    check (status in ('not_started','received_hbec','returned_hbec','sent_electronic','sent_paper')),
+    check (status in ('not_started','received_hbec','returned_hbec','adaptation','sent_electronic','sent_paper')),
   sort_order int not null default 0,
   position_discipline_id uuid references public.position_disciplines(id) on delete cascade, -- к какому именно альбому относится лист
   created_by uuid references public.profiles(id),
