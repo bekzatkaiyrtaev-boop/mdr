@@ -25,6 +25,7 @@ const STATUS_LABELS = {
   not_started:     { ru:'Не начат',                                        en:'Not started' },
   received_hbec:   { ru:'Получен от HBEC',                                 en:'Received from HBEC' },
   returned_hbec:   { ru:'Возвращен на доработку HBEC',                     en:'Returned by HBEC for rework' },
+  adaptation:      { ru:'На адаптации',                                    en:'Under adaptation' },
   sent_electronic: { ru:'Электронная версия отправлена на площадку',       en:'Electronic version sent to site' },
   sent_paper:      { ru:'Бумажная версия направлена на площадку',          en:'Hard copy sent to site' },
 };
