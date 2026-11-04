@@ -1407,10 +1407,20 @@ function bindSheetCompDetailEvents(){
   document.querySelectorAll('.sName').forEach(el => el.addEventListener('paste', async (e) => {
     const text = (e.clipboardData || window.clipboardData).getData('text');
     if (!text || !text.includes('\n')) return; // одна строка — обычная вставка в поле, ничего не перехватываем
-    e.preventDefault();
     const lines = text.split(/\r\n|\r|\n/).map(l => l.split('\t')[0].trim());
     while (lines.length && lines[lines.length-1] === '') lines.pop(); // хвостовой перенос строки из Excel
-    if (!lines.length) return;
+    if (lines.length <= 1){
+      // Excel/Word кладут в буфер и одну ячейку с переносом строки в конце — это НЕ вставка
+      // диапазона. Раньше такой текст подменял всё значение ячейки (набранное "5." пропадало),
+      // теперь вставляем его как обычный текст в позицию курсора
+      e.preventDefault();
+      if (lines.length && !document.execCommand('insertText', false, lines[0])){
+        el.setRangeText(lines[0], el.selectionStart, el.selectionEnd, 'end');
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return;
+    }
+    e.preventDefault();
 
     const pd = positionDisciplines.find(x => x.id === sheetCompAlbumId);
     if (!pd) return;
