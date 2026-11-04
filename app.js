@@ -1372,11 +1372,14 @@ function bindSheetCompDetailEvents(){
     // если EN пустой — сразу подставляем черновой автоперевод
     if (s && s.name_ru && !s.name_en){
       const translated = await translateRuToEn(s.name_ru);
-      if (translated){
+      // перевод приходит с задержкой — за это время пользователь мог уже набирать текст в
+      // других полях/строках. Поэтому НЕ перерисовываем таблицу целиком (это стирало всё
+      // набранное), а подставляем перевод точечно в поле EN, и только если оно всё ещё пустое
+      const enInput = document.querySelector(`.sNameEn[data-id="${id}"]`);
+      if (translated && !s.name_en && (!enInput || !enInput.value.trim())){
         await dbWrite(sb.from('sheets').update({ name_en: translated }).eq('id', id));
         s.name_en = translated;
-        document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
-        bindSheetCompDetailEvents();
+        if (enInput) enInput.value = translated;
       }
     }
   }));
