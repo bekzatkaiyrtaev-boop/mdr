@@ -86,6 +86,11 @@ tr.disc-row td{border-top:none;}
 #mdrPrintable table thead th{position:sticky;top:0;background:#f3f3f3;color:#000;z-index:1;box-shadow:none;}
 #mdrPrintable table tr:hover td{background:#f5f5f5;}
 tr.mdr-vol-row td,tr.mdr-pos-row td,tr.mdr-disc-row td,tr.mdr-doc-row td{color:#000;background:#fff;}
+/* прилагаемые документы альбома — выделены цветом и меткой */
+table tr.att-row td{background:rgba(96,140,255,.10);}
+.att-badge{font-size:10px;font-weight:700;color:#8fb0ff;letter-spacing:.3px;text-transform:uppercase;margin-bottom:2px;}
+.att-tag{display:inline-block;font-size:10px;font-weight:700;color:#1d4ed8;background:#dbe8ff;border-radius:4px;padding:0 5px;}
+#mdrPrintable table tr.mdr-attach td:not(.cust-col){background:#e6f0ff;}
 /* столбцы заказчика ("Обозначение Hebei", "Ревизия Hebei") — выделены цветом */
 table th.cust-col,table td.cust-col{background:rgba(244,185,66,.14);}
 table tr:hover td.cust-col{background:rgba(244,185,66,.22);}
@@ -207,6 +212,7 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
   .mdr-toggle{display:none !important;}
   #mdrPrintable table thead th.cust-col{background:#ffe599 !important;}
   tr.mdr-doc-row td.cust-col{background:#fff2cc !important;}
+  tr.mdr-attach td:not(.cust-col){background:#e6f0ff !important;}
 
   table{border-collapse:collapse !important;width:100% !important;}
   table th,table td{
