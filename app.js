@@ -22,24 +22,28 @@ let activeTab = null;
 let collapsedDisciplineGroups = new Set();
 
 const STATUS_LABELS = {
-  not_started:  { ru:'Не начат',            en:'Not started' },
-  in_progress:  { ru:'В работе',             en:'In progress' },
-  issued:       { ru:'На согласовании',      en:'Issued for approval' },
-  approved:     { ru:'Согласован',           en:'Approved' },
-  construction: { ru:'На стройплощадке',     en:'At construction site' },
+  not_started:     { ru:'Не начат',                                        en:'Not started' },
+  received_hbec:   { ru:'Получен от HBEC',                                 en:'Received from HBEC' },
+  returned_hbec:   { ru:'Возвращен на доработку HBEC',                     en:'Returned by HBEC for rework' },
+  adaptation:      { ru:'На адаптации',                                    en:'Under adaptation' },
+  sent_electronic: { ru:'Электронная версия отправлена на площадку',       en:'Electronic version sent to site' },
+  sent_paper:      { ru:'Бумажная версия направлена на площадку',          en:'Hard copy sent to site' },
 };
+const sheetStatusLabel = (st) => { const l = STATUS_LABELS[st]; return l ? t(l.ru, l.en) : ''; };
 const ASSIGNMENT_STATUS_LABELS = {
   not_started: { ru:'Не начато',  en:'Not started' },
   in_progress: { ru:'В работе',   en:'In progress' },
   done:        { ru:'Выполнено',  en:'Done' },
   cancelled:   { ru:'Отменено',   en:'Cancelled' },
 };
-const ROLE_LABELS = { gip:'ГИП', gip_assistant:'Помощник ГИПа', engineer:'Инженер' };
+const ROLE_LABELS = { gip:'ГИП', gip_assistant:'Помощник ГИПа', engineer:'Инженер', viewer:'Наблюдатель' };
 // закреплённый администратор — всегда полные права, роль нельзя сменить никому (см. также
 // current_user_role()/protect_profile_privileges в схеме БД — там та же проверка на бэкенде)
 const ADMIN_EMAIL = 'bekzat.kaiyrtaev@gmail.com';
 function isAdminEmail(email){ return (email||'').trim().toLowerCase() === ADMIN_EMAIL; }
 // ГИП и помощник ГИПа — полный доступ (наравне с ГИП, кроме явных ограничений в RLS)
+// «Наблюдатель» — гость: видит только вкладку MDR, только чтение (запись запрещена и в БД: ни одна политика записи не пускает эту роль)
+function isViewer(){ return profile.role === 'viewer' && !isAdminEmail(profile.email); }
 function isFullAccess(){ return profile.role === 'gip' || profile.role === 'gip_assistant' || isAdminEmail(profile.email); }
 const DEFAULT_VOLUMES = [
   { number:'1', name_ru:'ПАСПОРТ ПРОЕКТА', name_en:'DETAIL DESIGN PASSPORT', is_positions_root:false },
@@ -112,6 +116,7 @@ function showContextMenu(x, y, items){
   document.body.appendChild(menu);
   const rect = menu.getBoundingClientRect();
   menu.style.left = Math.max(4, Math.min(x, window.innerWidth - rect.width - 8)) + 'px';
+  // высота не больше окна — длинный список прокручивается колесом внутри меню
   menu.style.top = Math.max(4, Math.min(y, window.innerHeight - rect.height - 8)) + 'px';
   menu.querySelectorAll('.context-menu-item').forEach(btn => btn.addEventListener('click', () => {
     hideContextMenu();
@@ -124,7 +129,12 @@ function hideContextMenu(){
 }
 document.addEventListener('click', hideContextMenu);
 document.addEventListener('contextmenu', (e) => { if (!e.defaultPrevented) hideContextMenu(); });
-document.addEventListener('scroll', hideContextMenu, true);
+// прокрутка страницы закрывает меню, а прокрутка самого меню (длинный список) — нет
+document.addEventListener('scroll', (e) => {
+  const menu = document.getElementById('ctxMenu');
+  if (menu && e.target instanceof Node && menu.contains(e.target)) return;
+  hideContextMenu();
+}, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
 
 // ---------------- init / auth ----------------
@@ -197,6 +207,9 @@ async function loadAll(){
 // ---------------- tabs ----------------
 function buildTabs(){
   const tabs = [];
+  if (isViewer()){
+    tabs.push(['mdr', 'MDR']);
+  } else {
   if (isFullAccess()) tabs.push(['project', 'Проект']);
   tabs.push(['posgp', 'Позиции по ГП']);
   tabs.push(['sections', 'Создание разделов']);
@@ -204,6 +217,7 @@ function buildTabs(){
   tabs.push(['mdr', 'MDR']);
   tabs.push(['assignments', 'Поручения']);
   if (isFullAccess()) tabs.push(['users', 'Пользователи']);
+  }
 
   const tabsEl = document.getElementById('tabs');
   tabsEl.innerHTML = tabs.map(([id,label]) => {
@@ -221,6 +235,7 @@ function switchTab(id){
 }
 
 function renderTab(id){
+  if (isViewer()) id = 'mdr'; // наблюдателю доступна только вкладка MDR
   const c = document.getElementById('tabContent');
   if (id === 'project') c.innerHTML = renderProjectTab();
   else if (id === 'posgp') c.innerHTML = renderPositionsTab();
@@ -230,6 +245,13 @@ function renderTab(id){
   else if (id === 'assignments') c.innerHTML = renderAssignmentsTab();
   else if (id === 'users') c.innerHTML = renderUsersTab();
   bindTabEvents(id);
+  if (isViewer()) applyViewerReadOnly();
+}
+// режим «только чтение» для наблюдателя: поля не редактируются, кнопки изменения скрыты
+function applyViewerReadOnly(){
+  document.querySelectorAll('#tabContent input, #tabContent textarea').forEach(el => { el.readOnly = true; el.tabIndex = -1; });
+  document.querySelectorAll('#tabContent select').forEach(el => { el.disabled = true; });
+  document.querySelectorAll('#btnAddMdrRow, #btnTranslateMdr, .btn-del-volume').forEach(el => el.remove());
 }
 
 // ---------------- вкладка "Проект" (ГИП) ----------------
@@ -305,6 +327,12 @@ function employeeName(employeeId){
 }
 function sortedEmployees(){
   return [...employees].sort((a,b) => (a.full_name||'').localeCompare(b.full_name||'', 'ru'));
+}
+// порядок во вкладке «Пользователи»: администратор → ГИП → помощники ГИПа → инженеры → наблюдатели,
+// внутри группы — по алфавиту
+function sortedEmployeesByRole(){
+  const rank = (e) => isAdminEmail(e.email) ? 0 : ({ gip: 1, gip_assistant: 2, engineer: 3, viewer: 4 }[e.role] ?? 3);
+  return [...employees].sort((a, b) => rank(a) - rank(b) || (a.full_name||'').localeCompare(b.full_name||'', 'ru'));
 }
 // то же самое значение, что показывает/редактирует responsibleCellHtml, но просто строкой —
 // для мест, где нужно только прочитать текущего ответственного (напр. колонка в MDR)
@@ -430,7 +458,7 @@ function renderProjectTab(){
     </div>
   </div>
   <div class="card">
-    <div class="card-header">
+    <div class="card-header" id="discCardHeader" style="cursor:pointer;user-select:none;" title="Клик — свернуть все группы разделов, повторный клик — развернуть">
       <span class="title">Разделы и исполнители</span>
       <div style="display:flex;gap:8px;">
         <button class="btn secondary small" id="btnAddDisciplineHeader" title="Заголовок группы (напр. «Электрическая часть»), под которым можно свернуть/развернуть входящие в неё разделы">+ Заголовок</button>
@@ -457,8 +485,14 @@ function positionLabel(p){
   const name = t(p.name_ru, p.name_en);
   return `${p.position_code ? p.position_code+' ' : ''}${name || '(без названия)'}`;
 }
+// позиции всегда упорядочены по "№ по ГП" (естественная сортировка: 2 < 10, 14.1 после 14);
+// позиции без номера — в конце, при равенстве номеров — по sort_order
 function sortedPositions(){
-  return [...positions].sort((a,b)=>a.sort_order-b.sort_order);
+  return [...positions].sort((a,b) => {
+    const ca = (a.position_code || '').trim(), cb = (b.position_code || '').trim();
+    if (!ca !== !cb) return ca ? -1 : 1;
+    return ca.localeCompare(cb, 'ru', { numeric: true }) || a.sort_order - b.sort_order;
+  });
 }
 
 // ---------------- вкладка "Позиции по ГП" ----------------
@@ -472,21 +506,17 @@ function renderPositionsTab(){
     </div>
     <div class="card-body" style="padding:0;">
       <table style="table-layout:fixed;">
-        <colgroup><col style="width:110px;"><col><col style="width:70px;"><col style="width:44px;"></colgroup>
-        <tr><th>№ по ГП</th><th>Наименование позиции</th><th></th><th></th></tr>
-        ${list.map((p, idx) => `
+        <colgroup><col style="width:110px;"><col><col style="width:44px;"></colgroup>
+        <tr><th>№ по ГП</th><th>Наименование позиции</th><th></th></tr>
+        ${list.map((p) => `
           <tr class="pos-gp-row" data-id="${p.id}">
             <td><input type="text" class="text-like mPosCode" data-id="${p.id}" value="${esc(p.position_code||'')}" placeholder="№" style="width:100%;font-weight:700;"></td>
             <td>
               <input type="text" class="text-like mPosNameRu lang-ru" data-id="${p.id}" value="${esc(p.name_ru||'')}" placeholder="наименование не заполнено" style="display:block;width:100%;">
               <input type="text" class="text-like mPosNameEn lang-en" data-id="${p.id}" value="${esc(p.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;color:var(--muted);">
             </td>
-            <td style="white-space:nowrap;">
-              <button class="icon-btn btn-move-position" data-id="${p.id}" data-dir="up" ${idx<=0?'disabled':''}>↑</button>
-              <button class="icon-btn btn-move-position" data-id="${p.id}" data-dir="down" ${idx>=list.length-1?'disabled':''}>↓</button>
-            </td>
             <td><button class="icon-btn btn-del-position" data-id="${p.id}" title="Удалить позицию">✕</button></td>
-          </tr>`).join('') || `<tr><td colspan="4" class="muted">Позиции пока не добавлены — нажмите «+ Добавить позицию»</td></tr>`}
+          </tr>`).join('') || `<tr><td colspan="3" class="muted">Позиции пока не добавлены — нажмите «+ Добавить позицию»</td></tr>`}
       </table>
     </div>
   </div>`;
@@ -568,8 +598,8 @@ function renderStandaloneVolumeDetail(){
     </div>
   </div>`;
 }
-// правка позиций (код/наименование/перемещение/удаление) — общая логика для вкладок "Позиции по ГП" и "MDR",
-// т.к. обе рисуют строки с одинаковыми классами .mPosCode/.mPosNameRu/.mPosNameEn/.btn-move-position/.btn-del-position
+// правка позиций (код/наименование/удаление) — общая логика для вкладок "Позиции по ГП" и "MDR",
+// т.к. обе рисуют строки с одинаковыми классами .mPosCode/.mPosNameRu/.mPosNameEn/.btn-del-position
 function bindPositionEditEvents(){
   document.querySelectorAll('.mPosCode, .mPosNameRu, .mPosNameEn').forEach(el => el.addEventListener('change', async () => {
     const id2 = el.dataset.id;
@@ -584,19 +614,6 @@ function bindPositionEditEvents(){
       if (translated){ await dbWrite(sb.from('positions').update({ name_en: translated }).eq('id', id2)); p.name_en = translated; }
     }
     // номер позиции/имя влияют на нумерацию и порядок отображения — перерисовываем целиком
-    renderTab(activeTab);
-  }));
-
-  document.querySelectorAll('.btn-move-position').forEach(b => b.addEventListener('click', async () => {
-    const list = sortedPositions();
-    const idx = list.findIndex(x => x.id === b.dataset.id);
-    const swapIdx = b.dataset.dir === 'up' ? idx - 1 : idx + 1;
-    if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return;
-    const reordered = [...list];
-    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
-    await Promise.all(reordered.map((row, i) => dbWrite(sb.from('positions').update({ sort_order: i }).eq('id', row.id))));
-    const { data } = await sb.from('positions').select('*').order('sort_order');
-    positions = data || [];
     renderTab(activeTab);
   }));
 
@@ -1213,12 +1230,12 @@ function renderSheetCompDetail(){
         ${canEdit ? `<button class="btn small" id="btnAddSheet">+ добавить лист</button>` : ''}
       </div>
     </div>
-    <div class="card-body" style="padding:0;">
-      <table style="table-layout:fixed;">
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+      <table style="table-layout:fixed;min-width:1504px;">
         <colgroup>
-          <col><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col><col><col style="width:140px;"><col style="width:150px;"><col style="width:44px;">
+          <col style="width:240px;"><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col style="width:320px;"><col style="width:290px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
         </colgroup>
-        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th>Комментарии к листу</th><th>Ответы на комментарии</th><th>Проверил</th><th id="scHeaderStatus" style="cursor:pointer;" title="Двойной клик — заполнить весь столбец значением из первой строки">Статус</th><th></th></tr>
+        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th id="scHeaderComment" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Примечания</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col" id="scHeaderCustomerDesignation" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
         ${rows.length ? rows.map(s => `
           <tr data-id="${s.id}">
             <td>
@@ -1232,13 +1249,13 @@ function renderSheetCompDetail(){
             <td><input type="text" class="text-like sRevision" data-id="${s.id}" value="${esc(s.revision||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td class="muted" style="font-family:var(--mono);font-size:12px;" title="Считается автоматически: Номер договора-Номер по ГП-Шифр альбома">${esc(designation)}</td>
             <td><input type="text" class="text-like sComment" data-id="${s.id}" value="${esc(s.comment||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
-            <td><input type="text" class="text-like sReply" data-id="${s.id}" value="${esc(s.reply||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
-            <td><input type="text" class="text-like sCheckedBy" data-id="${s.id}" value="${esc(s.checked_by_name||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td>
               <select class="sStatus" data-id="${s.id}" ${canEdit?'':'disabled'}>
                 ${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${s.status===k?'selected':''}>${v.ru}</option>`).join('')}
               </select>
             </td>
+            <td class="cust-col"><input type="text" class="text-like sCustomerDesignation" data-id="${s.id}" value="${esc(s.customer_designation||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
+            <td class="cust-col"><input type="text" class="text-like sCustomerRevision" data-id="${s.id}" value="${esc(s.customer_revision||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td>${canEdit ? `<button class="icon-btn btn-del-sheet" data-id="${s.id}" title="Удалить лист">✕</button>` : ''}</td>
           </tr>`).join('') : `<tr><td colspan="9" class="muted">Листы ещё не добавлены</td></tr>`}
       </table>
@@ -1274,12 +1291,12 @@ async function insertSheetAdjacent(targetSheetId, dir){
   document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
   bindSheetCompDetailEvents();
 }
-// двойной клик по заголовку столбца в "Состав разделов" — заполнить весь столбец значением
+// клик по заголовку столбца в "Состав разделов" — заполнить весь столбец значением
 // из первой строки (по аналогии с "протянуть вниз" в Excel), одним пакетным запросом
 function bindFillDownHeader(headerId, cellSelector, dbColumn, getValue){
   const header = document.getElementById(headerId);
   if (!header) return;
-  header.addEventListener('dblclick', async () => {
+  header.addEventListener('click', async () => {
     const cells = [...document.querySelectorAll(`#sheetCompDetail ${cellSelector}`)];
     if (cells.length < 2 || cells[0].disabled) return;
     const value = getValue(cells[0]);
@@ -1354,7 +1371,7 @@ function bindSheetCompDetailEvents(){
     bindSheetCompDetailEvents();
   });
 
-  document.querySelectorAll('.sName, .sNameEn, .sFormat, .sRevision, .sComment, .sReply, .sCheckedBy').forEach(el => el.addEventListener('change', async () => {
+  document.querySelectorAll('.sName, .sNameEn, .sFormat, .sRevision, .sComment, .sCustomerDesignation, .sCustomerRevision').forEach(el => el.addEventListener('change', async () => {
     const id = el.dataset.id;
     const payload = {
       name_ru: document.querySelector(`.sName[data-id="${id}"]`).value.trim() || null,
@@ -1362,8 +1379,8 @@ function bindSheetCompDetailEvents(){
       format: document.querySelector(`.sFormat[data-id="${id}"]`).value.trim() || null,
       revision: document.querySelector(`.sRevision[data-id="${id}"]`).value.trim() || null,
       comment: document.querySelector(`.sComment[data-id="${id}"]`).value.trim() || null,
-      reply: document.querySelector(`.sReply[data-id="${id}"]`).value.trim() || null,
-      checked_by_name: document.querySelector(`.sCheckedBy[data-id="${id}"]`).value.trim() || null,
+      customer_designation: document.querySelector(`.sCustomerDesignation[data-id="${id}"]`).value.trim() || null,
+      customer_revision: document.querySelector(`.sCustomerRevision[data-id="${id}"]`).value.trim() || null,
       updated_at: new Date().toISOString(),
     };
     await dbWrite(sb.from('sheets').update(payload).eq('id', id));
@@ -1455,7 +1472,10 @@ function bindSheetCompDetailEvents(){
   // двойной клик по заголовку "Формат"/"Ревизия"/"Статус" — заполнить весь столбец
   // значением из первой строки (Excel-привычка "протянуть" значение вниз)
   bindFillDownHeader('scHeaderFormat', '.sFormat', 'format', el => el.value.trim() || null);
+  bindFillDownHeader('scHeaderComment', '.sComment', 'comment', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderRevision', '.sRevision', 'revision', el => el.value.trim() || null);
+  bindFillDownHeader('scHeaderCustomerDesignation', '.sCustomerDesignation', 'customer_designation', el => el.value.trim() || null);
+  bindFillDownHeader('scHeaderCustomerRevision', '.sCustomerRevision', 'customer_revision', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderStatus', '.sStatus', 'status', el => el.value);
 
   document.querySelectorAll('.btn-translate-sheet').forEach(b => b.addEventListener('click', async () => {
@@ -1696,36 +1716,69 @@ async function insertAlbumAdjacentVolume(volumeId, targetPdId, dir){
   positionDisciplines = data || [];
   renderTab(activeTab);
 }
-// три независимых (взаимоисключающих) фильтра строк MDR — по клику на заголовки
-// "Номер тома" / "№ по ГП" / "Обозначение", плюс ручные ▼/▶ на отдельных строках,
-// которые продолжают работать независимо от этих фильтров
-let mdrVolumesOnly = false;         // "Номер тома" — показывать только строки томов
-let mdrFilterPositionId = '';       // "№ по ГП" — показывать только эту позицию (+ её разделы/листы)
-let mdrFilterDisciplineCode = '';   // "Обозначение" — показывать только этот раздел (+ его листы), в любых позициях/томах
+// фильтры строк MDR по клику на заголовки — ВЗАИМОСВЯЗАНЫ: "№ по ГП", "Обозначение" (раздел),
+// "Ответственный исполнитель" и "Ревизия" работают одновременно (логическое "И"), поэтому можно,
+// например, выбрать позицию и потом ревизию — останутся разделы этой позиции с листами этой ревизии.
+// "Номер тома" — режим вида (только тома / без листов), накладывается поверх фильтров.
+// Ручные ▼/▶ на отдельных строках работают независимо
+let mdrVolumesOnly = false;         // "Номер тома" (1-й клик) — показывать только строки томов
+let mdrNoSheets = false;            // "Номер тома" (2-й клик) — весь список, кроме строк листов
+let mdrFilterPositionId = '';       // "№ по ГП" — только эта позиция
+let mdrFilterDisciplineCode = '';   // "Обозначение" — только этот раздел, в любых позициях/томах
+let mdrFilterResponsible = '';      // "Ответственный исполнитель" — только разделы (альбомы) и листы этого исполнителя
+let mdrFilterRevision = null;       // "Ревизия" — null: фильтра нет; строка (в т.ч. '' = без ревизии): только листы этой ревизии
 function resetMdrRowToggles(){
   document.querySelectorAll('.mdr-toggle').forEach(b => b.textContent = '▼');
 }
+function mdrAnyDataFilter(){
+  return !!(mdrFilterPositionId || mdrFilterDisciplineCode || mdrFilterResponsible) || mdrFilterRevision !== null;
+}
+// проходит ли строка альбома/листа фильтры "позиция + раздел + исполнитель" (ревизия — отдельно, только у листов)
+function mdrAlbumPasses(tr, skip = ''){
+  return (skip === 'pos' || !mdrFilterPositionId || tr.dataset.pos === mdrFilterPositionId)
+    && (skip === 'code' || !mdrFilterDisciplineCode || tr.dataset.code === mdrFilterDisciplineCode)
+    && (skip === 'resp' || !mdrFilterResponsible || tr.dataset.resp === mdrFilterResponsible);
+}
+function updateMdrFilterBadges(){
+  const setBadge = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text ? ': ' + text : ''; };
+  const pos = mdrFilterPositionId ? positions.find(x => x.id === mdrFilterPositionId) : null;
+  setBadge('mdrVolBadge', mdrVolumesOnly ? 'только тома' : mdrNoSheets ? 'без листов' : '');
+  setBadge('mdrPosBadge', pos ? (pos.position_code || '—') : '');
+  setBadge('mdrDesigBadge', mdrFilterDisciplineCode);
+  setBadge('mdrRespBadge', mdrFilterResponsible);
+  setBadge('mdrRevBadge', mdrFilterRevision === null ? '' : (mdrFilterRevision || '—'));
+  const btn = document.getElementById('btnResetMdrFilters');
+  if (btn) btn.classList.toggle('hidden', !(mdrAnyDataFilter() || mdrVolumesOnly || mdrNoSheets));
+}
+function resetAllMdrFilters(){
+  mdrVolumesOnly = false; mdrNoSheets = false;
+  mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; mdrFilterResponsible = ''; mdrFilterRevision = null;
+}
 function applyMdrRowFilters(){
-  if (mdrVolumesOnly){
-    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => tr.style.display = '');
-    document.querySelectorAll('tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = 'none');
-    return;
-  }
-  if (mdrFilterPositionId){
-    document.querySelectorAll('tr.mdr-vol-row').forEach(tr => tr.style.display = 'none');
-    document.querySelectorAll('tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => {
-      tr.style.display = tr.dataset.pos === mdrFilterPositionId ? '' : 'none';
-    });
-    return;
-  }
-  if (mdrFilterDisciplineCode){
-    document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row').forEach(tr => tr.style.display = 'none');
-    document.querySelectorAll('tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => {
-      tr.style.display = tr.dataset.code === mdrFilterDisciplineCode ? '' : 'none';
-    });
-    return;
-  }
-  document.querySelectorAll('tr.mdr-vol-row, tr.mdr-pos-row, tr.mdr-disc-row, tr.mdr-doc-row').forEach(tr => tr.style.display = '');
+  updateMdrFilterBadges();
+  const any = mdrAnyDataFilter();
+  const posIds = new Set(), volIds = new Set(), okPdids = new Set();
+  let anyPos = false;
+  const docs = [...document.querySelectorAll('tr.mdr-doc-row')];
+  const okDoc = docs.map(tr => mdrAlbumPasses(tr) && (mdrFilterRevision === null || tr.dataset.rev === mdrFilterRevision));
+  docs.forEach((tr, i) => { if (okDoc[i]) okPdids.add(tr.dataset.pdid); });
+  // альбом (раздел) виден, если проходит фильтры и (при фильтре ревизии) в нём есть листы этой ревизии
+  document.querySelectorAll('tr.mdr-disc-row').forEach(tr => {
+    const ok = mdrAlbumPasses(tr) && (mdrFilterRevision === null || okPdids.has(tr.dataset.pdid));
+    tr.style.display = ok && !mdrVolumesOnly ? '' : 'none';
+    if (ok){
+      if (tr.dataset.pos){ posIds.add(tr.dataset.pos); anyPos = true; }
+      if (tr.dataset.vol) volIds.add(tr.dataset.vol);
+    }
+  });
+  docs.forEach((tr, i) => { tr.style.display = okDoc[i] && !mdrVolumesOnly && !mdrNoSheets ? '' : 'none'; });
+  // позиции и тома — как контекст для отобранных разделов
+  document.querySelectorAll('tr.mdr-pos-row').forEach(tr => {
+    tr.style.display = !mdrVolumesOnly && (!any || posIds.has(tr.dataset.pos)) ? '' : 'none';
+  });
+  document.querySelectorAll('tr.mdr-vol-row').forEach(tr => {
+    tr.style.display = (!any || volIds.has(tr.dataset.volid) || (anyPos && tr.dataset.root)) ? '' : 'none';
+  });
 }
 // строки альбомов + их листов для MDR — общая логика для альбомов внутри позиции
 // (owner = {pos:id}) и альбомов, стоящих прямо в "Отдельном томе" (owner = {vol:id})
@@ -1740,7 +1793,7 @@ function discSheetRowsHtml(discs, owner){
     const responsibleName = resolvedResponsibleName(pd, d);
     const sheetRows = sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id));
     rows.push(`
-      <tr class="mdr-disc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}">
+      <tr class="mdr-disc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}">
         <td><input type="text" class="text-like mAlbumManualNum" data-pdid="${pd.id}" value="${esc(pd.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td>
           <button class="mdr-toggle btn-toggle-disc" data-pdid="${pd.id}">▼</button>
@@ -1751,16 +1804,22 @@ function discSheetRowsHtml(discs, owner){
         <td>${esc(pd.note||'')}</td>
         <td title="Ответственный задаётся во вкладке «Создание разделов»">${esc(responsibleName)}</td>
         <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
       </tr>`);
     sheetRows.forEach((s) => {
       rows.push(`
-      <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}">
+      <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}" data-rev="${esc((s.revision||'').trim())}">
         <td><input type="text" class="text-like sManualNum" data-id="${s.id}" value="${esc(s.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td></td>
         <td style="padding-left:80px;">${esc(t(s.name_ru, s.name_en) || '—')}</td>
         <td>${esc(s.comment||'')}</td>
         <td></td>
         <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.revision||'')}</td>
+        <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(sheetStatusLabel(s.status))}</td>
+        <td class="muted cust-col" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_designation||'')}</td>
+        <td class="muted cust-col" title="Задаётся во вкладке «Состав разделов»">${esc(s.customer_revision||'')}</td>
       </tr>`);
     });
   });
@@ -1787,6 +1846,9 @@ function mdrExcelDiscSheetRows(discs, owner){
         <td style="${XL_TD}background:#ead1dc;">${esc(pd.note||'')}</td>
         <td style="${XL_TD}background:#ead1dc;">${esc(responsibleName)}</td>
         <td style="${XL_TD}background:#ead1dc;"></td>
+        <td style="${XL_TD}background:#ead1dc;"></td>
+        <td style="${XL_TD}background:#ead1dc;"></td>
+        <td style="${XL_TD}background:#ead1dc;"></td>
       </tr>`);
     sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id)).forEach(s => {
       rows.push(`
@@ -1797,12 +1859,15 @@ function mdrExcelDiscSheetRows(discs, owner){
         <td style="${XL_TD}">${esc(s.comment||'')}</td>
         <td style="${XL_TD}"></td>
         <td style="${XL_TD}">${esc(s.revision||'')}</td>
+        <td style="${XL_TD}">${esc(sheetStatusLabel(s.status))}</td>
+        <td style="${XL_TD}background:#fff2cc;">${esc(s.customer_designation||'')}</td>
+        <td style="${XL_TD}background:#fff2cc;">${esc(s.customer_revision||'')}</td>
       </tr>`);
     });
   });
   return rows;
 }
-function buildMdrExcelHtml(){
+function buildMdrExcelHtml(forPrint = false){
   const p = project || {};
   const posList = sortedPositions();
   const groups = posList.map(pos => ({ pos, discs: disciplinesForPositionAll(pos.id) }));
@@ -1812,7 +1877,7 @@ function buildMdrExcelHtml(){
       <tr>
         <td style="${XL_TD}background:#d9d2e9;font-weight:700;"></td>
         <td style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc(pos.position_code||'—')}</td>
-        <td colspan="4" style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc((pos.name_ru||pos.name_en) ? t(pos.name_ru,pos.name_en) : '')}</td>
+        <td colspan="7" style="${XL_TD}background:#d9d2e9;font-weight:700;">${esc((pos.name_ru||pos.name_en) ? t(pos.name_ru,pos.name_en) : '')}</td>
       </tr>`);
     positionRows.push(...mdrExcelDiscSheetRows(discs, { pos: pos.id }));
   });
@@ -1825,7 +1890,7 @@ function buildMdrExcelHtml(){
       <tr>
         <td style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(v.number||'')}</td>
         <td style="${XL_TD}background:#b4a7d6;font-weight:700;"></td>
-        <td colspan="4" style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(t(v.name_ru,v.name_en)||'')}</td>
+        <td colspan="7" style="${XL_TD}background:#b4a7d6;font-weight:700;">${esc(t(v.name_ru,v.name_en)||'')}</td>
       </tr>`);
     if (v.is_positions_root){
       bodyRows.push(...positionRows);
@@ -1836,15 +1901,16 @@ function buildMdrExcelHtml(){
   });
   if (!positionRowsPlaced) bodyRows.push(...positionRows);
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
-    <table style="border-collapse:collapse;font-family:Arial,sans-serif;">
-      <tr><td colspan="6" style="font-weight:700;font-size:14px;padding:4px 6px;">${esc(t('СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)','MASTER DOCUMENT REGISTER (MDR)'))}</td></tr>
-      <tr><td colspan="6"></td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Номер договора','Contract No.'))}</td><td colspan="5" style="padding:2px 6px;">${esc(p.contract_number||'')}</td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Наименование','Project Name'))}</td><td colspan="5" style="padding:2px 6px;">${esc(t(p.name_ru,p.name_en)||'')}</td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Организация','Organization'))}</td><td colspan="5" style="padding:2px 6px;">${esc(t(p.company_name_ru,p.company_name_en)||'')}</td></tr>
-      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Стадия','Stage'))}</td><td colspan="5" style="padding:2px 6px;">${esc(t(p.stage_ru,p.stage_en)||'')}</td></tr>
-      <tr><td colspan="6"></td></tr>
+  const infoRows = `
+      <tr><td colspan="9" style="font-weight:700;font-size:14px;padding:4px 6px;">${esc(t('СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)','MASTER DOCUMENT REGISTER (MDR)'))}</td></tr>
+      <tr><td colspan="9"></td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Номер договора','Contract No.'))}</td><td colspan="8" style="padding:2px 6px;">${esc(p.contract_number||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Наименование','Project Name'))}</td><td colspan="8" style="padding:2px 6px;">${esc(t(p.name_ru,p.name_en)||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Организация','Organization'))}</td><td colspan="8" style="padding:2px 6px;">${esc(t(p.company_name_ru,p.company_name_en)||'')}</td></tr>
+      <tr><td style="font-weight:700;padding:2px 6px;">${esc(t('Стадия','Stage'))}</td><td colspan="8" style="padding:2px 6px;">${esc(t(p.stage_ru,p.stage_en)||'')}</td></tr>
+      <tr><td colspan="9"></td></tr>
+`;
+  const headRow = `
       <tr>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Номер тома','Volume No.'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('№ по ГП','Position No.'))}</th>
@@ -1852,10 +1918,45 @@ function buildMdrExcelHtml(){
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Примечание','Remarks'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ответственный исполнитель','Responsible Person'))}</th>
         <th style="${XL_TD}background:#f3f3f3;">${esc(t('Ревизия','Revision'))}</th>
+        <th style="${XL_TD}background:#f3f3f3;">${esc(t('Статус','Status'))}</th>
+        <th style="${XL_TD}background:#ffe599;">${esc(t('Обозначение Hebei','Hebei Document No.'))}</th>
+        <th style="${XL_TD}background:#ffe599;">${esc(t('Ревизия Hebei','Hebei Revision'))}</th>
       </tr>
-      ${bodyRows.join('')}
+`;
+  if (forPrint){
+    // лёгкая статичная версия для печати: без полей ввода и обработчиков, шапка столбцов
+    // повторяется на каждой странице; печать из самой страницы MDR (тысячи строк с input)
+    // падала с "Out of Memory"
+    const colgroup = '<colgroup><col style="width:5%;"><col style="width:5%;"><col style="width:30%;"><col style="width:10%;"><col style="width:12%;"><col style="width:6%;"><col style="width:12%;"><col style="width:12%;"><col style="width:8%;"></colgroup>';
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>MDR</title>
+    <style>
+      @page{size:A3 landscape;margin:10mm;}
+      body{margin:0;font-family:Arial,sans-serif;}
+      table{border-collapse:collapse;width:100%;}
+      table.mdr{table-layout:fixed;}
+      table.mdr td,table.mdr th{word-break:break-word;overflow-wrap:anywhere;}
+      thead{display:table-header-group;}
+      /* шапка столбцов выше обычной строки (inline-стиль ячеек перебиваем через !important) */
+      thead th{height:16mm;padding:8px 6px !important;font-size:12px !important;vertical-align:middle;}
+      tr{break-inside:avoid;}
+    </style></head><body>
+    <table>${infoRows}</table>
+    <table class="mdr">${colgroup}<thead>${headRow}</thead><tbody>${bodyRows.join('')}</tbody></table>
+    <script>window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 300); });<\/script>
+  </body></html>`;
+  }
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
+    <table style="border-collapse:collapse;font-family:Arial,sans-serif;">
+${infoRows}${headRow}      ${bodyRows.join('')}
     </table>
   </body></html>`;
+}
+function printMdr(){
+  const w = window.open('', '_blank');
+  if (!w) return alert('Браузер заблокировал новое окно. Разрешите всплывающие окна для этого сайта и повторите.');
+  w.document.open();
+  w.document.write(buildMdrExcelHtml(true));
+  w.document.close();
 }
 function downloadMdrExcel(){
   const html = buildMdrExcelHtml();
@@ -1882,7 +1983,7 @@ function renderMdrTab(){
           <button class="mdr-toggle btn-toggle-pos" data-pos="${p.id}">▼</button>
           ${esc(p.position_code || '—')}
         </td>
-        <td colspan="5" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
+        <td colspan="7" style="font-weight:600;" title="Код и наименование позиции задаются во вкладке «Позиции по ГП»">
           ${(p.name_ru || p.name_en) ? esc(t(p.name_ru, p.name_en)) : '<span style="opacity:.6;">не заполнено — см. «Позиции по ГП»</span>'}
         </td>
       </tr>`);
@@ -1894,10 +1995,10 @@ function renderMdrTab(){
   sortedVolumes().forEach(v => {
     const volDiscs = v.is_positions_root ? [] : disciplinesForVolumeAll(v.id);
     bodyRows.push(`
-      <tr class="mdr-vol-row">
+      <tr class="mdr-vol-row" data-volid="${v.id}" ${v.is_positions_root ? 'data-root="1"' : ''}>
         <td><input type="text" class="text-like volNumber" data-id="${v.id}" value="${esc(v.number||'')}" placeholder="№" style="width:100%;font-weight:700;"></td>
         <td>${volDiscs.length ? `<button class="mdr-toggle btn-toggle-vol" data-vol="${v.id}">▼</button>` : ''}</td>
-        <td colspan="4">
+        <td colspan="6">
           <input type="text" class="text-like volNameRu lang-ru" data-id="${v.id}" value="${esc(v.name_ru||'')}" placeholder="наименование не заполнено" style="display:block;width:100%;font-weight:700;">
           <input type="text" class="text-like volNameEn lang-en" data-id="${v.id}" value="${esc(v.name_en||'')}" placeholder="name (en)" style="display:block;width:100%;font-size:12px;">
         </td>
@@ -1917,6 +2018,7 @@ function renderMdrTab(){
     <div class="card-header">
       <span class="title"><span class="lang-ru">СВОДНЫЙ РЕЕСТР ПРОЕКТНОЙ ДОКУМЕНТАЦИИ (СРПД)</span><span class="lang-ru lang-en"> / </span><span class="lang-en">MASTER DOCUMENT REGISTER (MDR)</span></span>
       <div style="display:flex;gap:8px;">
+        <button class="btn secondary small hidden" id="btnResetMdrFilters" title="Сбросить все фильтры шапки">✕ Сбросить фильтры</button>
         <button class="btn secondary small" id="btnAddMdrRow">+ Добавить том</button>
         <button class="btn secondary small" id="btnTranslateMdr">🌐 Перевести на EN</button>
         <button class="btn secondary small" id="btnExportMdr">📥 Скачать (Excel)</button>
@@ -1935,21 +2037,23 @@ function renderMdrTab(){
   <div class="card" id="mdrPrintable" style="padding:0;">
     <table style="table-layout:fixed;">
       <colgroup>
-        <col style="width:90px;"><col style="width:70px;"><col><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col id="mdrEditionCol" style="width:110px;">
+        <col style="width:90px;"><col style="width:70px;"><col><col style="width:200px;"><col style="width:190px;"><col style="width:100px;"><col style="width:200px;"><col style="width:170px;"><col style="width:110px;">
       </colgroup>
       <thead>
         <tr>
-          <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — показать только тома, повторный клик — вернуть все строки"><span class="lang-ru">Номер тома</span><span class="lang-en">Volume No.</span></th>
-          <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию и показать только её, повторный клик — вернуть все строки"><span class="lang-ru">№ по ГП</span><span class="lang-en">Position No.</span></th>
-          <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел и показать только его строки/листы, повторный клик — вернуть все строки"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-en">Document Name (Notation)</span></th>
-          <th><span class="lang-ru">Примечание</span><span class="lang-en">Remarks</span></th>
-          <th title="Задаётся во вкладке «Создание разделов»"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-en">Responsible Person</span></th>
-          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия</span><span class="lang-en">Revision</span></th>
-          <th id="mdrEditionHeader"><span class="lang-ru">Редакция</span><span class="lang-en">Edition</span></th>
+          <th id="mdrVolHeader" style="cursor:pointer;user-select:none;" title="Клик — только тома; второй клик — всё, кроме наименований листов; третий — вернуть все строки. Работает вместе с остальными фильтрами"><span class="lang-ru">Номер тома</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Volume No.</span><span id="mdrVolBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th id="mdrPosHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать позицию (фильтр работает вместе с остальными)"><span class="lang-ru">№ по ГП</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Position No.</span><span id="mdrPosBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th id="mdrDesigHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать раздел (фильтр работает вместе с остальными)"><span class="lang-ru">Наименование документа (Обозначение)</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Document Name (Notation)</span><span id="mdrDesigBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th><span class="lang-ru">Примечание</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Remarks</span></th>
+          <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя (фильтр работает вместе с остальными)"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Responsible Person</span><span id="mdrRespBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th id="mdrRevHeader" style="cursor:pointer;user-select:none;" title="Клик — ревизия по кругу: каждый клик — следующая ревизия, после последней — все (фильтр работает вместе с остальными)"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span><span id="mdrRevBadge" style="color:var(--accent);font-weight:700;"></span></th>
+          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Статус</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Status</span></th>
+          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Document No.</span></th>
+          <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Revision</span></th>
         </tr>
       </thead>
       <tbody>
-        ${bodyRows.join('') || `<tr><td colspan="7" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
+        ${bodyRows.join('') || `<tr><td colspan="9" class="muted">Пока пусто — нажмите «+ Добавить строку»</td></tr>`}
       </tbody>
     </table>
     <datalist id="disciplineNameSuggestions">
@@ -2237,9 +2341,28 @@ function codesByEmployee(){
   });
   return map;
 }
+// сколько разделов (альбомов) и листов заполнено у каждого сотрудника: считаем альбомы, где он
+// ответственный (колонка "Ответственный исполнитель" в MDR), и листы в них; альбомы без листов не учитываются
+function filledStatsByEmployeeName(){
+  const sheetsByPd = new Map();
+  sheets.forEach(s => sheetsByPd.set(s.position_discipline_id, (sheetsByPd.get(s.position_discipline_id) || 0) + 1));
+  const stats = new Map(); // имя (lowercase) → { albums, sheets }
+  positionDisciplines.forEach(pd => {
+    const n = sheetsByPd.get(pd.id) || 0;
+    if (!n) return;
+    const d = disciplines.find(x => x.code === pd.discipline_code);
+    const name = resolvedResponsibleName(pd, d).trim().toLowerCase();
+    if (!name) return;
+    const st = stats.get(name) || { albums: 0, sheets: 0 };
+    st.albums += 1; st.sheets += n;
+    stats.set(name, st);
+  });
+  return stats;
+}
 function renderUsersTab(){
-  const list = sortedEmployees();
+  const list = sortedEmployeesByRole();
   const codes = codesByEmployee();
+  const filled = filledStatsByEmployeeName();
   return `
   <div class="card">
     <div class="card-header">
@@ -2248,12 +2371,13 @@ function renderUsersTab(){
     </div>
     <div class="card-body" style="padding:0;">
       <table style="table-layout:fixed;">
-        <colgroup><col><col style="width:240px;"><col style="width:160px;"><col style="width:180px;"><col style="width:44px;"></colgroup>
-        <tr><th>Имя</th><th>Email</th><th>Разделы</th><th>Роль</th><th></th></tr>
+        <colgroup><col><col style="width:240px;"><col style="width:160px;"><col style="width:180px;"><col style="width:150px;"><col style="width:44px;"></colgroup>
+        <tr><th>Имя</th><th>Email</th><th>Разделы</th><th>Роль</th><th title="Сколько разделов (альбомов) и листов заполнено в «Составе разделов» там, где сотрудник ответственный. Разделы без листов не учитываются">Заполнено (разд. / листов)</th><th></th></tr>
         ${list.map(e => {
           const registered = allProfiles.some(p => (p.email||'').toLowerCase() === (e.email||'').toLowerCase());
           const empCodes = [...(codes[e.id] || [])];
           const isAdmin = isAdminEmail(e.email);
+          const st = filled.get((e.full_name || '').trim().toLowerCase());
           return `
           <tr data-id="${e.id}">
             <td><input type="text" class="text-like eName" data-id="${e.id}" value="${esc(e.full_name||'')}" placeholder="ФИО" style="width:100%;"></td>
@@ -2267,9 +2391,10 @@ function renderUsersTab(){
                   </select>`}
               ${!registered ? `<div class="muted" style="font-size:11px;margin-top:2px;">ещё не зарегистрирован</div>` : ''}
             </td>
+            <td style="font-size:12px;">${st ? `<b>${st.albums}</b> / <b>${st.sheets}</b>` : '<span class="muted">—</span>'}</td>
             <td>${isAdmin ? '' : `<button class="icon-btn btn-del-employee" data-id="${e.id}" title="Удалить сотрудника">✕</button>`}</td>
           </tr>`;
-        }).join('') || `<tr><td colspan="5" class="muted">Сотрудники пока не добавлены — нажмите «+ Добавить сотрудника»</td></tr>`}
+        }).join('') || `<tr><td colspan="6" class="muted">Сотрудники пока не добавлены — нажмите «+ Добавить сотрудника»</td></tr>`}
       </table>
       <p class="muted" style="padding:12px 16px;font-size:12px;">
         Исполнителей на конкретные разделы назначают во вкладке «Проект» — «Разделы и
@@ -2354,6 +2479,19 @@ function bindTabEvents(id){
       document.getElementById('tabContent').innerHTML = renderProjectTab();
       bindTabEvents('project');
     }));
+
+    // клик по шапке карточки "Разделы и исполнители" — свернуть все группы, повторный — развернуть все
+    const discCardHeader = document.getElementById('discCardHeader');
+    if (discCardHeader) discCardHeader.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return; // кнопки "+ Заголовок" / "+ Добавить раздел" — своё действие
+      const headerIds = disciplines.filter(d => d.is_header).map(d => d.id);
+      if (!headerIds.length) return;
+      const allCollapsed = headerIds.every(id => collapsedDisciplineGroups.has(id));
+      if (allCollapsed) collapsedDisciplineGroups.clear();
+      else headerIds.forEach(id => collapsedDisciplineGroups.add(id));
+      document.getElementById('tabContent').innerHTML = renderProjectTab();
+      bindTabEvents('project');
+    });
 
     document.querySelectorAll('.hNameRu, .hNameEn').forEach(el => el.addEventListener('change', async () => {
       const id = el.dataset.id;
@@ -2515,7 +2653,7 @@ function bindTabEvents(id){
   }
   else if (id === 'mdr'){
     const btnPrint = document.getElementById('btnPrintMdr');
-    if (btnPrint) btnPrint.addEventListener('click', () => window.print());
+    if (btnPrint) btnPrint.addEventListener('click', () => printMdr());
 
     document.getElementById('btnExportMdr').addEventListener('click', () => downloadMdrExcel());
 
@@ -2588,14 +2726,6 @@ function bindTabEvents(id){
       if (s) s.manual_number = manual_number;
     }));
 
-    document.querySelectorAll('.sMdrEdition').forEach(el => el.addEventListener('change', async () => {
-      const id2 = el.dataset.id;
-      const edition = el.value || null;
-      await dbWrite(sb.from('sheets').update({ edition }).eq('id', id2));
-      const s = sheets.find(x => x.id === id2);
-      if (s) s.edition = edition;
-    }));
-
     document.querySelectorAll('.btn-toggle-pos').forEach(b => b.addEventListener('click', () => {
       const collapsed = b.textContent === '▼';
       b.textContent = collapsed ? '▶' : '▼';
@@ -2617,55 +2747,70 @@ function bindTabEvents(id){
         .forEach(tr => tr.style.display = collapsed ? 'none' : '');
     }));
 
+    // меню выбора значения фильтра: первым пунктом — сброс этого фильтра, текущее значение помечено ✓
+    const showMdrFilterMenu = (e, title, current, options, onPick) => {
+      e.stopPropagation(); // иначе клик долетает до document → hideContextMenu и закрывает открываемый список
+      const items = [{ label: '✕ Все (сбросить этот фильтр)', onClick: () => onPick(null) }]
+        .concat(options.map(o => ({ label: (o.value === current ? '✓ ' : '') + o.label, onClick: () => onPick(o.value) })));
+      showContextMenu(e.clientX, e.clientY, items);
+    };
+    const refreshMdr = () => { resetMdrRowToggles(); applyMdrRowFilters(); };
+
     document.getElementById('mdrVolHeader').addEventListener('click', () => {
-      mdrVolumesOnly = !mdrVolumesOnly;
-      if (mdrVolumesOnly){ mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; } // фильтры взаимоисключающие
-      resetMdrRowToggles();
-      applyMdrRowFilters();
+      // цикл по клику: все строки → только тома → всё, кроме листов → все строки (фильтры остаются)
+      if (mdrNoSheets){ mdrNoSheets = false; }
+      else if (mdrVolumesOnly){ mdrVolumesOnly = false; mdrNoSheets = true; }
+      else { mdrVolumesOnly = true; }
+      refreshMdr();
     });
 
     document.getElementById('mdrPosHeader').addEventListener('click', (e) => {
-      e.stopPropagation(); // иначе этот же клик долетает до document и document→hideContextMenu
-      // тут же закрывает список, который мы открываем ниже
-      if (mdrFilterPositionId){
-        // уже показываем одну позицию — повторный клик по заголовку возвращает все строки
-        mdrFilterPositionId = '';
-        resetMdrRowToggles();
-        applyMdrRowFilters();
-        return;
-      }
       const list = sortedPositions();
       if (!list.length) return alert('Позиции ещё не добавлены — см. вкладку «Позиции по ГП».');
-      showContextMenu(e.clientX, e.clientY, list.map(p => ({
-        label: positionLabel(p),
-        onClick: () => {
-          mdrVolumesOnly = false; mdrFilterDisciplineCode = '';
-          mdrFilterPositionId = p.id;
-          resetMdrRowToggles();
-          applyMdrRowFilters();
-        },
-      })));
+      showMdrFilterMenu(e, 'pos', mdrFilterPositionId, list.map(p => ({ value: p.id, label: positionLabel(p) })), (v) => {
+        mdrFilterPositionId = v || '';
+        refreshMdr();
+      });
     });
 
     document.getElementById('mdrDesigHeader').addEventListener('click', (e) => {
-      e.stopPropagation(); // см. комментарий у mdrPosHeader выше
-      if (mdrFilterDisciplineCode){
-        mdrFilterDisciplineCode = '';
-        resetMdrRowToggles();
-        applyMdrRowFilters();
-        return;
-      }
       const list = sortedDisciplines().filter(d => d.code);
       if (!list.length) return alert('Разделы ещё не добавлены — см. вкладку «Проект».');
-      showContextMenu(e.clientX, e.clientY, list.map(d => ({
-        label: `${d.code} — ${d.name_ru || '(без названия)'}`,
-        onClick: () => {
-          mdrVolumesOnly = false; mdrFilterPositionId = '';
-          mdrFilterDisciplineCode = d.code;
-          resetMdrRowToggles();
-          applyMdrRowFilters();
-        },
-      })));
+      showMdrFilterMenu(e, 'code', mdrFilterDisciplineCode, list.map(d => ({ value: d.code, label: `${d.code} — ${d.name_ru || '(без названия)'}` })), (v) => {
+        mdrFilterDisciplineCode = v || '';
+        refreshMdr();
+      });
+    });
+
+    document.getElementById('mdrRespHeader').addEventListener('click', (e) => {
+      // исполнители — только те, кто есть среди разделов, прошедших остальные фильтры (позиция/раздел)
+      const names = [...new Set([...document.querySelectorAll('tr.mdr-disc-row')]
+        .filter(tr => mdrAlbumPasses(tr, 'resp')).map(tr => tr.dataset.resp).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'ru'));
+      if (mdrFilterResponsible && !names.includes(mdrFilterResponsible)) names.push(mdrFilterResponsible);
+      if (!names.length) return alert('Ответственные исполнители ещё не назначены — см. вкладку «Создание разделов».');
+      showMdrFilterMenu(e, 'resp', mdrFilterResponsible, names.map(n => ({ value: n, label: n })), (v) => {
+        mdrFilterResponsible = v || '';
+        refreshMdr();
+      });
+    });
+
+    document.getElementById('mdrRevHeader').addEventListener('click', () => {
+      // цикл по клику: все → ревизия 1 → ревизия 2 → … → (без ревизии) → все;
+      // ревизии берутся из листов, прошедших остальные фильтры (например, только выбранной позиции)
+      const revs = [...new Set([...document.querySelectorAll('tr.mdr-doc-row')]
+        .filter(tr => mdrAlbumPasses(tr)).map(tr => tr.dataset.rev))]
+        .sort((a, b) => a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'ru', { numeric: true }));
+      if (!revs.length) return alert('Листов, подходящих под выбранные фильтры, нет.');
+      const idx = mdrFilterRevision === null ? -1 : revs.indexOf(mdrFilterRevision);
+      const next = (mdrFilterRevision !== null && idx < 0) ? 0 : idx + 1;
+      mdrFilterRevision = next >= revs.length ? null : revs[next];
+      refreshMdr();
+    });
+
+    document.getElementById('btnResetMdrFilters').addEventListener('click', () => {
+      resetAllMdrFilters();
+      refreshMdr();
     });
 
     applyMdrRowFilters();

@@ -10,7 +10,7 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   full_name text,
-  role text not null default 'engineer' check (role in ('gip','gip_assistant','engineer')),
+  role text not null default 'engineer' check (role in ('gip','gip_assistant','engineer','viewer')),
   created_at timestamptz not null default now()
 );
 
@@ -115,7 +115,7 @@ create table public.employees (
   id uuid primary key default gen_random_uuid(),
   full_name text not null,
   email text not null,
-  role text not null default 'engineer' check (role in ('gip','gip_assistant','engineer')),
+  role text not null default 'engineer' check (role in ('gip','gip_assistant','engineer','viewer')),
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now()
 );
@@ -238,12 +238,14 @@ create table public.positions (
 alter table public.positions enable row level security;
 
 create policy "positions_select" on public.positions for select using (true);
+-- права на позиции: ГИП, помощник ГИПа и исполнитель раздела ГП/ГТ (генпланист) — см. migration_030
 create policy "positions_insert" on public.positions for insert
-  with check (public.current_user_role() in ('gip','gip_assistant'));
+  with check (public.current_user_role() in ('gip','gip_assistant') or public.is_genplan_user());
 create policy "positions_update" on public.positions for update
-  using (public.current_user_role() in ('gip','gip_assistant'));
+  using (public.current_user_role() in ('gip','gip_assistant') or public.is_genplan_user())
+  with check (public.current_user_role() in ('gip','gip_assistant') or public.is_genplan_user());
 create policy "positions_delete" on public.positions for delete
-  using (public.current_user_role() in ('gip','gip_assistant'));
+  using (public.current_user_role() in ('gip','gip_assistant') or public.is_genplan_user());
 
 -- ---------- альбомы в позиции ИЛИ прямо в томе (задаёт ГИП/помощник ГИПа) ----------
 -- один "раздел" (public.disciplines, напр. КЖ) может иметь несколько альбомов
@@ -371,12 +373,14 @@ create table public.sheets (
                           -- в MDR ("Ревизия") просто отображается, не редактируется там
   edition text,           -- "Редакция" — задаётся прямо в MDR (обычно R01/R02/A1/A2/A3)
   designation text,       -- обозначение листа
+  customer_designation text, -- "Обозначение Hebei" — задаётся во вкладке "Состав разделов", в MDR справа
+  customer_revision text,    -- "Ревизия Hebei" — то же
   comment text,           -- комментарии к листу
   reply text,             -- ответы на комментарии
   checked_by_name text,   -- ФИО проверившего лист
   manual_number text,     -- "Номер тома / номер альбома" — ручное поле, ни на что не влияет
   status text not null default 'not_started'
-    check (status in ('not_started','in_progress','issued','approved','construction')),
+    check (status in ('not_started','received_hbec','returned_hbec','adaptation','sent_electronic','sent_paper')),
   sort_order int not null default 0,
   position_discipline_id uuid references public.position_disciplines(id) on delete cascade, -- к какому именно альбому относится лист
   created_by uuid references public.profiles(id),
