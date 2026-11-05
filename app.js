@@ -161,6 +161,9 @@ async function init(){
   await loadAll();
   await fetchChatData();
   subscribeChatRealtime();
+  await fetchTicker();
+  renderTickerBar();
+  subscribeTickerRealtime();
   buildTabs();
 }
 
@@ -3142,6 +3145,7 @@ let chatMessages = [];
 let chatReactions = [];
 let chatBannedIds = new Set();
 let chatReplyingTo = null; // { id, authorName, text } — на что сейчас отвечаем
+let appTicker = null; // строка public.app_ticker — бегущая строка, видна на любой вкладке
 
 // Тот же набор смайликов, что и везде в приложении — реакция (тап) ставит
 // её заново, повторный тап тем же смайликом снимает реакцию
@@ -3211,6 +3215,7 @@ function renderChatBubble(m){
   const replyBtn = canPostChat() ? ` <button type="button" class="reply-btn" data-reply="${m.id}" title="${t('Ответить','Reply')}">↩</button>` : '';
   const adminBtns = isFullAccess() ? `
     <button type="button" class="mod-btn" data-pin-chat="${m.id}" title="${m.pinned ? t('Открепить','Unpin') : t('Закрепить','Pin')}">${m.pinned ? '📌' : '📍'}</button>
+    <button type="button" class="mod-btn" data-ticker-chat="${m.id}" title="${t('В бегущую строку','Send to ticker')}">📢</button>
     <button type="button" class="mod-btn" data-del-chat="${m.id}" title="${t('Удалить','Delete')}">🗑</button>
     ${m.author_id !== profile.id ? `<button type="button" class="mod-btn" data-ban-chat="${m.author_id}" title="${t('Заблокировать в чате','Ban from chat')}">🚫</button>` : ''}
   ` : '';
@@ -3236,15 +3241,32 @@ function renderChatPinnedBar(){
   </div>`;
 }
 
+function renderTickerAdminPanel(){
+  if (!isFullAccess()) return '';
+  const active = appTicker && appTicker.active && !isTickerExpired(appTicker);
+  return `<div class="card-header ticker-admin">
+    <span class="title" style="font-size:12px">${t('Бегущая строка','Ticker')}</span>
+    <div class="ticker-admin-row">
+      ${active
+        ? `<span class="muted" style="font-size:11px">${t('Активна, выключится','Active, turns off')} ${fmtChatDate(appTicker.expires_at)}</span>
+           <button class="btn secondary small" id="tickerStopBtn">${t('Остановить','Stop')}</button>`
+        : `<input type="text" id="tickerTextInput" maxlength="500" placeholder="${t('Текст бегущей строки...','Ticker text...')}">
+           <button class="btn secondary small" id="tickerStartBtn">${t('Запустить','Start')}</button>`}
+    </div>
+  </div>`;
+}
+
 function renderChatTab(){
   return `<div class="card chat-card">
     <div class="card-header"><span class="title">${t('Чат','Chat')}</span></div>
+    ${renderTickerAdminPanel()}
     <div id="chatPinnedSlot">${renderChatPinnedBar()}</div>
     <div class="chat-messages" id="chatMessagesBox">${chatMessagesInnerHtml()}</div>
     ${isChatBanned()
       ? `<div class="chat-banned-note">${t('Администратор ограничил вам участие в чате.','An admin has restricted your access to chat.')}</div>`
       : `<div class="chat-reply-bar" id="chatReplyBar" hidden></div>
          <div class="chat-inputrow">
+           <button type="button" class="emoji-btn" id="chatEmojiBtn" title="${t('Смайлики','Emoji')}">🙂</button>
            <input type="text" id="chatInput" maxlength="2000" placeholder="${t('Написать сообщение...','Type a message...')}">
            <button class="btn" id="chatSendBtn">${t('Отправить','Send')}</button>
          </div>`}
@@ -3275,6 +3297,7 @@ function wireChatMessageButtons(){
   box.querySelectorAll('[data-pin-chat]').forEach(b => b.addEventListener('click', () => toggleChatPin(b.dataset.pinChat)));
   box.querySelectorAll('[data-del-chat]').forEach(b => b.addEventListener('click', () => deleteChatMessage(b.dataset.delChat)));
   box.querySelectorAll('[data-ban-chat]').forEach(b => b.addEventListener('click', () => banChatUser(b.dataset.banChat)));
+  box.querySelectorAll('[data-ticker-chat]').forEach(b => b.addEventListener('click', () => sendChatMessageToTicker(b.dataset.tickerChat)));
 }
 
 function wireChatPinnedBar(){
@@ -3295,6 +3318,15 @@ function bindChatEvents(){
   if (input) input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChatMessage(); }
   });
+  const emojiBtn = document.getElementById('chatEmojiBtn');
+  if (emojiBtn) emojiBtn.addEventListener('click', toggleChatComposerEmojiPicker);
+  const tickerStartBtn = document.getElementById('tickerStartBtn');
+  if (tickerStartBtn) tickerStartBtn.addEventListener('click', () => {
+    const v = document.getElementById('tickerTextInput').value.trim();
+    if (v) startTicker(v);
+  });
+  const tickerStopBtn = document.getElementById('tickerStopBtn');
+  if (tickerStopBtn) tickerStopBtn.addEventListener('click', stopTicker);
 }
 
 async function sendChatMessage(){
@@ -3434,6 +3466,113 @@ async function banChatUser(userId){
   await dbWrite(sb.from('chat_banned').insert({ user_id: userId, banned_by: profile.id }));
   await fetchChatData();
   renderChatMessages();
+}
+
+// ---------------- смайлики в поле ввода сообщения ----------------
+function toggleChatComposerEmojiPicker(e){
+  e.stopPropagation();
+  closeChatPopups();
+  const box = document.createElement('div');
+  box.className = 'reaction-picker';
+  box.innerHTML = CHAT_EMOJI.map(em => `<button type="button" class="emoji-item">${em}</button>`).join('');
+  document.body.appendChild(box);
+  const r = e.currentTarget.getBoundingClientRect();
+  box.style.left = Math.max(8, r.left) + 'px';
+  box.style.top = (r.top - box.offsetHeight - 6) + 'px';
+  box.querySelectorAll('.emoji-item').forEach(btn => btn.addEventListener('click', () => {
+    const input = document.getElementById('chatInput');
+    if (input){ input.value += btn.textContent; input.focus(); }
+    box.remove();
+  }));
+  setTimeout(() => {
+    document.addEventListener('click', function closeOnce(ev){
+      if (!box.contains(ev.target)){ box.remove(); document.removeEventListener('click', closeOnce); }
+    });
+  }, 0);
+}
+
+// ================================================================
+// ---------------- бегущая строка приложения ----------------
+// Одна запись (public.app_ticker, id='main'): администратор запускает
+// текст вручную (панель в «Чате») или кнопкой 📢 у сообщения — полоса
+// показывается внизу экрана на ЛЮБОЙ вкладке МДР, не только в чате.
+// По умолчанию выключается сама через 24 часа (expires_at), как и
+// закреплённое сообщение чата на сайте PSD PRO.
+// ================================================================
+let tickerBarEl = null;
+let tickerDismissedText = null;
+try { tickerDismissedText = sessionStorage.getItem('mdr_ticker_dismissed'); } catch(e){}
+
+function isTickerExpired(row){
+  return !!(row && row.expires_at && new Date(row.expires_at).getTime() <= Date.now());
+}
+
+async function fetchTicker(){
+  const { data } = await sb.from('app_ticker').select('*').eq('id', 'main').maybeSingle();
+  appTicker = data || null;
+}
+
+function subscribeTickerRealtime(){
+  sb.channel('app-ticker')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_ticker' }, async () => {
+      await fetchTicker();
+      renderTickerBar();
+      if (activeTab === 'chat') renderTab('chat');
+    })
+    .subscribe();
+}
+
+function renderTickerBar(){
+  const active = appTicker && appTicker.active && !isTickerExpired(appTicker) && appTicker.text;
+  if (!active || appTicker.text === tickerDismissedText){
+    if (tickerBarEl){ tickerBarEl.remove(); tickerBarEl = null; }
+    return;
+  }
+  if (!tickerBarEl){
+    tickerBarEl = document.createElement('div');
+    tickerBarEl.className = 'app-ticker';
+    document.body.appendChild(tickerBarEl);
+  }
+  const text = appTicker.text + (appTicker.author_name ? ' — ' + appTicker.author_name : '');
+  const duration = Math.max(14, text.length * 0.26);
+  tickerBarEl.innerHTML =
+    `<span class="at-track" style="animation-duration:${duration}s">${esc(text)}</span>` +
+    `<button type="button" class="at-close" title="${t('Скрыть','Hide')}">✕</button>`;
+  tickerBarEl.querySelector('.at-close').addEventListener('click', () => {
+    try { sessionStorage.setItem('mdr_ticker_dismissed', appTicker.text); } catch(e){}
+    tickerDismissedText = appTicker.text;
+    tickerBarEl.remove();
+    tickerBarEl = null;
+  });
+}
+
+async function startTicker(text, authorName){
+  if (!isFullAccess()) return;
+  await dbWrite(sb.from('app_ticker').update({
+    text: String(text || '').slice(0, 500),
+    author_name: authorName || profileName(profile.id),
+    active: true,
+    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+    updated_by: profile.id,
+  }).eq('id', 'main'));
+  await fetchTicker();
+  renderTickerBar();
+  if (activeTab === 'chat') renderTab('chat');
+}
+async function stopTicker(){
+  if (!isFullAccess()) return;
+  await dbWrite(sb.from('app_ticker').update({ active: false, updated_at: new Date().toISOString(), updated_by: profile.id }).eq('id', 'main'));
+  await fetchTicker();
+  renderTickerBar();
+  if (activeTab === 'chat') renderTab('chat');
+}
+async function sendChatMessageToTicker(id){
+  if (!isFullAccess()) return;
+  const msg = chatMessages.find(m => m.id === id);
+  if (!msg) return;
+  if (!confirm(t('Отправить это сообщение в бегущую строку?','Send this message to the ticker?'))) return;
+  await startTicker(msg.text, profileName(msg.author_id));
 }
 
 init();
