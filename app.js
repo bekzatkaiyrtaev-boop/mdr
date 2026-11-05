@@ -217,6 +217,7 @@ function buildTabs(){
   tabs.push(['mdr', 'MDR']);
   tabs.push(['assignments', 'Поручения']);
   if (isFullAccess()) tabs.push(['users', 'Пользователи']);
+  if (isFullAccess()) tabs.push(['stats', 'Статистика']);
   }
 
   const tabsEl = document.getElementById('tabs');
@@ -244,6 +245,7 @@ function renderTab(id){
   else if (id === 'mdr') c.innerHTML = renderMdrTab();
   else if (id === 'assignments') c.innerHTML = renderAssignmentsTab();
   else if (id === 'users') c.innerHTML = renderUsersTab();
+  else if (id === 'stats' && isFullAccess()) c.innerHTML = renderStatsTab();
   bindTabEvents(id);
   if (isViewer()) applyViewerReadOnly();
 }
@@ -2414,6 +2416,129 @@ function renderUsersTab(){
   </div>`;
 }
 
+// ---------------- вкладка "Статистика" (ГИП, помощник ГИПа, администратор) ----------------
+// Считает всё по данным, загруженным в память при открытии страницы, — поэтому есть кнопка
+// "Обновить" (перечитывает базу): пока вкладка открыта, другие пользователи могли что-то поменять
+function computeStats(){
+  const realDisciplines = disciplines.filter(d => !d.is_header); // заголовки групп — не разделы
+  const albumsInPositions = positionDisciplines.filter(pd => pd.position_id).length;
+  const albumsInVolumes = positionDisciplines.filter(pd => pd.volume_id).length;
+
+  // листы по статусам; статус вне известного набора (напр. БД ещё без последней миграции) — в "Прочие"
+  const statusKeys = Object.keys(STATUS_LABELS);
+  const sheetsByStatus = Object.fromEntries(statusKeys.map(k => [k, 0]));
+  let sheetsOtherStatus = 0;
+  const statusesByAlbum = new Map(); // pd.id → Set статусов его листов
+  sheets.forEach(s => {
+    if (s.status in sheetsByStatus) sheetsByStatus[s.status] += 1; else sheetsOtherStatus += 1;
+    if (!statusesByAlbum.has(s.position_discipline_id)) statusesByAlbum.set(s.position_discipline_id, new Set());
+    statusesByAlbum.get(s.position_discipline_id).add(s.status);
+  });
+
+  // статус альбома = общий статус всех его листов; у альбома своего статуса в базе нет
+  const albumsByStatus = Object.fromEntries(statusKeys.map(k => [k, 0]));
+  let albumsNoSheets = 0, albumsMixed = 0, albumsOtherStatus = 0;
+  positionDisciplines.forEach(pd => {
+    const set = statusesByAlbum.get(pd.id);
+    if (!set || !set.size) albumsNoSheets += 1;
+    else if (set.size > 1) albumsMixed += 1;
+    else { const st = [...set][0]; if (st in albumsByStatus) albumsByStatus[st] += 1; else albumsOtherStatus += 1; }
+  });
+
+  // пользователи: справочник сотрудников + зарегистрированные, которых в справочнике нет
+  const emailKey = (e) => (e || '').trim().toLowerCase();
+  const profileEmails = new Set(allProfiles.map(p => emailKey(p.email)));
+  const rosterEmails = new Set(employees.map(e => emailKey(e.email)));
+  const people = [
+    ...employees.map(e => ({ role: isAdminEmail(e.email) ? 'admin' : e.role, registered: profileEmails.has(emailKey(e.email)) })),
+    ...allProfiles.filter(p => !rosterEmails.has(emailKey(p.email)))
+      .map(p => ({ role: isAdminEmail(p.email) ? 'admin' : p.role, registered: true, outsideRoster: true })),
+  ];
+  const usersByRole = { admin: 0, gip: 0, gip_assistant: 0, engineer: 0, viewer: 0 };
+  people.forEach(u => { if (u.role in usersByRole) usersByRole[u.role] += 1; else usersByRole.engineer += 1; });
+
+  return {
+    volumes: volumes.length, positions: positions.length, disciplines: realDisciplines.length,
+    albums: positionDisciplines.length, albumsInPositions, albumsInVolumes, sheets: sheets.length,
+    sheetsByStatus, sheetsOtherStatus, albumsByStatus, albumsNoSheets, albumsMixed, albumsOtherStatus,
+    usersTotal: people.length, usersByRole,
+    usersRegistered: people.filter(u => u.registered).length,
+    usersNotRegistered: people.filter(u => !u.registered).length,
+    usersOutsideRoster: people.filter(u => u.outsideRoster).length,
+  };
+}
+function renderStatsTab(){
+  const s = computeStats();
+  const card = (num, label, sub) => `
+    <div class="stat-card" ${num === 0 ? 'style="opacity:.55;"' : ''}>
+      <div class="num">${num}</div>
+      <div class="label">${esc(label)}</div>
+      ${sub ? `<div class="muted" style="font-size:11px;margin-top:2px;">${esc(sub)}</div>` : ''}
+    </div>`;
+  const pct = (n, total) => total ? Math.round(n / total * 100) + '%' : '';
+  const statusLabel = (k) => { const l = STATUS_LABELS[k]; return t(l.ru, l.en); };
+  const statusKeys = Object.keys(STATUS_LABELS);
+
+  return `
+  <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+    <button class="btn secondary small" id="btnRefreshStats" title="Перечитать данные из базы — другие пользователи могли внести изменения с момента открытия страницы">↻ Обновить данные</button>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="title">Структура проекта</span></div>
+    <div class="card-body"><div class="stat-grid">
+      ${card(s.volumes, 'Томов')}
+      ${card(s.positions, 'Позиций по ГП')}
+      ${card(s.disciplines, 'Разделов', 'справочник «Разделы и исполнители»')}
+      ${card(s.albums, 'Альбомов', 'всего')}
+      ${card(s.albumsInPositions, 'Альбомов в позициях')}
+      ${card(s.albumsInVolumes, 'Альбомов в отдельных томах')}
+      ${card(s.sheets, 'Листов', 'во всех альбомах')}
+    </div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="title">Листы по статусам</span></div>
+    <div class="card-body"><div class="stat-grid">
+      ${statusKeys.map(k => card(s.sheetsByStatus[k], statusLabel(k), pct(s.sheetsByStatus[k], s.sheets))).join('')}
+      ${s.sheetsOtherStatus ? card(s.sheetsOtherStatus, 'Прочие статусы', pct(s.sheetsOtherStatus, s.sheets)) : ''}
+    </div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="title">Альбомы по статусам</span></div>
+    <div class="card-body">
+      <div class="stat-grid">
+        ${card(s.albumsNoSheets, 'Без листов', pct(s.albumsNoSheets, s.albums))}
+        ${statusKeys.map(k => card(s.albumsByStatus[k], statusLabel(k), pct(s.albumsByStatus[k], s.albums))).join('')}
+        ${card(s.albumsMixed, 'Разные статусы', pct(s.albumsMixed, s.albums))}
+        ${s.albumsOtherStatus ? card(s.albumsOtherStatus, 'Прочие статусы', pct(s.albumsOtherStatus, s.albums)) : ''}
+      </div>
+      <p class="muted" style="font-size:12px;margin:12px 0 0;">
+        У альбома нет собственного статуса — статусы ставятся листам. Статус альбома здесь — общий статус
+        всех его листов; «Разные статусы» — если у листов альбома статусы отличаются.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="title">Пользователи</span></div>
+    <div class="card-body">
+      <div class="stat-grid">
+        ${card(s.usersTotal, 'Всего пользователей')}
+        ${card(s.usersByRole.admin, 'Администратор')}
+        ${card(s.usersByRole.gip, ROLE_LABELS.gip)}
+        ${card(s.usersByRole.gip_assistant, ROLE_LABELS.gip_assistant)}
+        ${card(s.usersByRole.engineer, ROLE_LABELS.engineer)}
+        ${card(s.usersByRole.viewer, ROLE_LABELS.viewer)}
+        ${card(s.usersRegistered, 'Зарегистрированы', pct(s.usersRegistered, s.usersTotal))}
+        ${card(s.usersNotRegistered, 'Ещё не зарегистрированы', pct(s.usersNotRegistered, s.usersTotal))}
+      </div>
+      ${s.usersOutsideRoster ? `<p class="muted" style="font-size:12px;margin:12px 0 0;">Из них ${s.usersOutsideRoster} зарегистрированы, но не внесены в список во вкладке «Пользователи».</p>` : ''}
+    </div>
+  </div>`;
+}
+
 // ---------------- события форм ----------------
 function bindTabEvents(id){
   if (id === 'project'){
@@ -2896,6 +3021,14 @@ function bindTabEvents(id){
       disciplineAssignees.forEach(a => { if (a.employee_id === b.dataset.id) a.employee_id = null; });
       renderTab(activeTab);
     }));
+  }
+  else if (id === 'stats'){
+    const btn = document.getElementById('btnRefreshStats'); // нет кнопки — вкладка не показывалась (нет доступа)
+    if (btn) btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = 'Обновляю…';
+      await loadAll();
+      renderTab('stats');
+    });
   }
 }
 
