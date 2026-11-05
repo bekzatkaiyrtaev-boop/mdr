@@ -230,7 +230,7 @@ function buildTabs(){
 
   const tabsEl = document.getElementById('tabs');
   tabsEl.innerHTML = tabs.map(([id,label]) => {
-    const badge = id === 'assignments' ? myPendingAssignmentsCount() : 0;
+    const badge = id === 'assignments' ? myPendingAssignmentsCount() : id === 'chat' ? totalDmUnread() : 0;
     return `<div class="tab" data-tab="${id}">${label}${badge > 0 ? `<span class="tab-badge">${badge}</span>` : ''}</div>`;
   }).join('');
   tabsEl.querySelectorAll('.tab').forEach(el => el.addEventListener('click', () => switchTab(el.dataset.tab)));
@@ -3295,14 +3295,18 @@ function renderChatTab(){
       <div class="chat-sidebar-item${activeChatChannel === 'group' ? ' active' : ''}" data-channel="group">
         <span class="csi-icon">💬</span><span class="csi-name">${t('Общий чат','Group chat')}</span>
       </div>
-      ${entries.map(en => en.profileId
-        ? `<div class="chat-sidebar-item${activeChatChannel === en.profileId ? ' active' : ''}" data-channel="${en.profileId}">
+      ${entries.map(en => {
+        if (!en.profileId){
+          return `<div class="chat-sidebar-item disabled" title="${t('Ещё не зарегистрирован в МДР','Not registered in MDR yet')}">
              <span class="csi-icon">👤</span><span class="csi-name">${esc(en.name)}</span>
-           </div>`
-        : `<div class="chat-sidebar-item disabled" title="${t('Ещё не зарегистрирован в МДР','Not registered in MDR yet')}">
+           </div>`;
+        }
+        const unread = unreadCountFrom(en.profileId);
+        return `<div class="chat-sidebar-item${activeChatChannel === en.profileId ? ' active' : ''}${unread ? ' has-unread' : ''}" data-channel="${en.profileId}">
              <span class="csi-icon">👤</span><span class="csi-name">${esc(en.name)}</span>
-           </div>`
-      ).join('')}
+             ${unread ? `<span class="csi-unread">${unread}</span>` : ''}
+           </div>`;
+      }).join('')}
     </div>
     <div class="chat-panel">${renderChatPanelHtml()}</div>
   </div>`;
@@ -3391,6 +3395,9 @@ function wireChatSidebar(){
   document.querySelectorAll('#tabContent [data-channel]').forEach(el => el.addEventListener('click', () => {
     if (el.dataset.channel === activeChatChannel) return;
     activeChatChannel = el.dataset.channel;
+    // отмечаем прочитанным ДО перерисовки — бейдж у собеседника пропадает
+    // сразу, без лишнего мигания
+    if (activeChatChannel !== 'group'){ setDmLastRead(activeChatChannel); updateChatTabBadge(); }
     renderTab('chat');
   }));
 }
@@ -3428,6 +3435,42 @@ function bindGroupChatEvents(){
 let dmMessages = [];
 let dmReactions = [];
 
+// Непрочитанные личные сообщения — "прочитано до" храним в localStorage
+// по собеседнику (per-браузер, не синхронизируется между устройствами —
+// для внутреннего чата этого достаточно, сервер тут не нужен). Открыл
+// диалог — отметка сразу обновляется, бейджи у этого собеседника и на
+// самой вкладке «Чат» исчезают.
+function dmLastReadKey(contactId){ return 'mdr_dm_last_read_' + contactId; }
+function getDmLastRead(contactId){
+  try { return localStorage.getItem(dmLastReadKey(contactId)); } catch(e){ return null; }
+}
+function setDmLastRead(contactId){
+  try { localStorage.setItem(dmLastReadKey(contactId), new Date().toISOString()); } catch(e){}
+}
+function unreadCountFrom(contactId){
+  const lastRead = getDmLastRead(contactId);
+  return dmMessages.filter(m => m.sender_id === contactId && m.recipient_id === profile.id
+    && (!lastRead || new Date(m.created_at) > new Date(lastRead))).length;
+}
+function totalDmUnread(){
+  return chatSidebarEntries().filter(en => en.profileId).reduce((sum, en) => sum + unreadCountFrom(en.profileId), 0);
+}
+// Бейдж на самой вкладке «Чат» — тот же приём, что и у «Поручений»
+// (updateAssignmentsBadge): точечно обновляем бейдж, не перестраивая
+// всю навигацию целиком (buildTabs() сбросил бы текущую открытую вкладку)
+function updateChatTabBadge(){
+  const tabEl = document.querySelector('.tab[data-tab="chat"]');
+  if (!tabEl) return;
+  const count = totalDmUnread();
+  let badge = tabEl.querySelector('.tab-badge');
+  if (count > 0){
+    if (!badge){ badge = document.createElement('span'); badge.className = 'tab-badge'; tabEl.appendChild(badge); }
+    badge.textContent = count;
+  } else if (badge){
+    badge.remove();
+  }
+}
+
 async function fetchDmData(){
   const [{ data: msgs }, { data: reacts }] = await Promise.all([
     sb.from('direct_messages').select('*').order('created_at'),
@@ -3446,7 +3489,12 @@ function subscribeDmRealtime(){
 }
 async function onDmRealtimeChange(){
   await fetchDmData();
-  if (activeTab === 'chat' && activeChatChannel !== 'group') renderDmMessages();
+  if (activeTab === 'chat' && activeChatChannel !== 'group') setDmLastRead(activeChatChannel); // диалог открыт прямо сейчас
+  updateChatTabBadge();
+  if (activeTab !== 'chat') return;
+  // Перерисовываем вкладку целиком, а не только ленту сообщений — иначе
+  // бейдж-счётчик у собеседника слева в списке останется устаревшим
+  renderTab('chat');
 }
 
 function currentDmThread(){
@@ -3510,6 +3558,8 @@ function bindDmEvents(){
   const box = document.getElementById('dmMessagesBox');
   if (box){ box.dataset.ready = '1'; box.scrollTop = box.scrollHeight; }
   wireDmMessageButtons();
+  setDmLastRead(activeChatChannel); // диалог сейчас открыт и виден — считаем прочитанным
+  updateChatTabBadge();
   const input = document.getElementById('dmInput');
   const sendBtn = document.getElementById('dmSendBtn');
   if (sendBtn) sendBtn.addEventListener('click', sendDmMessage);

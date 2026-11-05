@@ -200,7 +200,9 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 .chat-sidebar-item.active{background:var(--surface2);border-left-color:var(--accent);color:#fff;font-weight:600;}
 .chat-sidebar-item.disabled{color:var(--muted);cursor:default;}
 .chat-sidebar-item.disabled:hover{background:none;}
-.chat-sidebar-item .csi-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.chat-sidebar-item .csi-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.chat-sidebar-item.has-unread{font-weight:700;color:#fff;}
+.csi-unread{flex-shrink:0;background:var(--red);color:#fff;font-size:10px;font-weight:700;line-height:1;min-width:16px;height:16px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;}
 .chat-panel{flex:1;display:flex;flex-direction:column;min-width:0;}
 @media(max-width:760px){
   .chat-card.chat-with-sidebar{flex-direction:column;height:auto;max-height:none;}
