@@ -1811,12 +1811,13 @@ let mdrNoSheets = false;            // "Номер тома" (2-й клик) —
 let mdrFilterPositionId = '';       // "№ по ГП" — только эта позиция
 let mdrFilterDisciplineCode = '';   // "Обозначение" — только этот раздел, в любых позициях/томах
 let mdrFilterResponsible = '';      // "Ответственный исполнитель" — только разделы (альбомы) и листы этого исполнителя
+let mdrFilterStatus = '';           // "Статус" — только листы с этим статусом (ключ из STATUS_LABELS)
 let mdrFilterRevision = null;       // "Ревизия" — null: фильтра нет; строка (в т.ч. '' = без ревизии): только листы этой ревизии
 function resetMdrRowToggles(){
   document.querySelectorAll('.mdr-toggle').forEach(b => b.textContent = '▼');
 }
 function mdrAnyDataFilter(){
-  return !!(mdrFilterPositionId || mdrFilterDisciplineCode || mdrFilterResponsible) || mdrFilterRevision !== null;
+  return !!(mdrFilterPositionId || mdrFilterDisciplineCode || mdrFilterResponsible) || mdrFilterRevision !== null || !!mdrFilterStatus;
 }
 // проходит ли строка альбома/листа фильтры "позиция + раздел + исполнитель" (ревизия — отдельно, только у листов)
 function mdrAlbumPasses(tr, skip = ''){
@@ -1831,13 +1832,14 @@ function updateMdrFilterBadges(){
   setBadge('mdrPosBadge', pos ? (pos.position_code || '—') : '');
   setBadge('mdrDesigBadge', mdrFilterDisciplineCode);
   setBadge('mdrRespBadge', mdrFilterResponsible);
+  setBadge('mdrStatusBadge', mdrFilterStatus ? sheetStatusLabel(mdrFilterStatus) : '');
   setBadge('mdrRevBadge', mdrFilterRevision === null ? '' : (mdrFilterRevision || '—'));
   const btn = document.getElementById('btnResetMdrFilters');
   if (btn) btn.classList.toggle('hidden', !(mdrAnyDataFilter() || mdrVolumesOnly || mdrNoSheets));
 }
 function resetAllMdrFilters(){
   mdrVolumesOnly = false; mdrNoSheets = false;
-  mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; mdrFilterResponsible = ''; mdrFilterRevision = null;
+  mdrFilterPositionId = ''; mdrFilterDisciplineCode = ''; mdrFilterResponsible = ''; mdrFilterRevision = null; mdrFilterStatus = '';
 }
 function applyMdrRowFilters(){
   updateMdrFilterBadges();
@@ -1845,11 +1847,11 @@ function applyMdrRowFilters(){
   const posIds = new Set(), volIds = new Set(), okPdids = new Set();
   let anyPos = false;
   const docs = [...document.querySelectorAll('tr.mdr-doc-row')];
-  const okDoc = docs.map(tr => mdrAlbumPasses(tr) && (mdrFilterRevision === null || tr.dataset.rev === mdrFilterRevision));
+  const okDoc = docs.map(tr => mdrAlbumPasses(tr) && (mdrFilterRevision === null || tr.dataset.rev === mdrFilterRevision) && (!mdrFilterStatus || tr.dataset.status === mdrFilterStatus));
   docs.forEach((tr, i) => { if (okDoc[i]) okPdids.add(tr.dataset.pdid); });
   // альбом (раздел) виден, если проходит фильтры и (при фильтре ревизии) в нём есть листы этой ревизии
   document.querySelectorAll('tr.mdr-disc-row').forEach(tr => {
-    const ok = mdrAlbumPasses(tr) && (mdrFilterRevision === null || okPdids.has(tr.dataset.pdid));
+    const ok = mdrAlbumPasses(tr) && ((mdrFilterRevision === null && !mdrFilterStatus) || okPdids.has(tr.dataset.pdid));
     tr.style.display = ok && !mdrVolumesOnly ? '' : 'none';
     if (ok){
       if (tr.dataset.pos){ posIds.add(tr.dataset.pos); anyPos = true; }
@@ -1895,7 +1897,7 @@ function discSheetRowsHtml(discs, owner){
       </tr>`);
     sheetRows.forEach((s) => {
       rows.push(`
-      <tr class="mdr-doc-row${s.is_attachment ? ' mdr-attach' : ''}" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}" data-rev="${esc((s.revision||'').trim())}">
+      <tr class="mdr-doc-row${s.is_attachment ? ' mdr-attach' : ''}" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}" data-rev="${esc((s.revision||'').trim())}" data-status="${esc(s.status||'')}">
         <td><input type="text" class="text-like sManualNum" data-id="${s.id}" value="${esc(s.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td></td>
         <td style="padding-left:80px;">${s.is_attachment ? '<span class="att-tag">📎 ' + esc(t('Прилагаемый документ', 'Attached document')) + '</span> ' : ''}${esc(t(s.name_ru, s.name_en) || '—')}${s.is_attachment && s.attachment_designation ? ` <span style="font-family:var(--mono);font-size:11px;font-weight:400;">(${esc(s.attachment_designation)})</span>` : ''}</td>
@@ -2132,7 +2134,7 @@ function renderMdrTab(){
           <th><span class="lang-ru">Примечание</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Remarks</span></th>
           <th id="mdrRespHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать исполнителя (фильтр работает вместе с остальными)"><span class="lang-ru">Ответственный исполнитель</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Responsible Person</span><span id="mdrRespBadge" style="color:var(--accent);font-weight:700;"></span></th>
           <th id="mdrRevHeader" style="cursor:pointer;user-select:none;" title="Клик — ревизия по кругу: каждый клик — следующая ревизия, после последней — все (фильтр работает вместе с остальными)"><span class="lang-ru">Ревизия</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Revision</span><span id="mdrRevBadge" style="color:var(--accent);font-weight:700;"></span></th>
-          <th title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Статус</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Status</span></th>
+          <th id="mdrStatusHeader" style="cursor:pointer;user-select:none;" title="Клик — выбрать статус (фильтр работает вместе с остальными)"><span class="lang-ru">Статус</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Status</span><span id="mdrStatusBadge" style="color:var(--accent);font-weight:700;"></span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Обозначение Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Document No.</span></th>
           <th class="cust-col" title="Задаётся во вкладке «Состав разделов»"><span class="lang-ru">Ревизия Hebei</span><span class="lang-ru lang-en"> / </span><span class="lang-en">Hebei Revision</span></th>
         </tr>
@@ -3008,11 +3010,24 @@ function bindTabEvents(id){
       });
     });
 
+    document.getElementById('mdrStatusHeader').addEventListener('click', (e) => {
+      // статусы — только те, что есть у листов, прошедших остальные фильтры (в порядке списка статусов)
+      const present = new Set([...document.querySelectorAll('tr.mdr-doc-row')]
+        .filter(tr => mdrAlbumPasses(tr) && (mdrFilterRevision === null || tr.dataset.rev === mdrFilterRevision))
+        .map(tr => tr.dataset.status));
+      const keys = Object.keys(STATUS_LABELS).filter(k => present.has(k) || k === mdrFilterStatus);
+      if (!keys.length) return alert('Листов, подходящих под выбранные фильтры, нет.');
+      showMdrFilterMenu(e, 'status', mdrFilterStatus, keys.map(k => ({ value: k, label: sheetStatusLabel(k) })), (v) => {
+        mdrFilterStatus = v || '';
+        refreshMdr();
+      });
+    });
+
     document.getElementById('mdrRevHeader').addEventListener('click', () => {
       // цикл по клику: все → ревизия 1 → ревизия 2 → … → (без ревизии) → все;
       // ревизии берутся из листов, прошедших остальные фильтры (например, только выбранной позиции)
       const revs = [...new Set([...document.querySelectorAll('tr.mdr-doc-row')]
-        .filter(tr => mdrAlbumPasses(tr)).map(tr => tr.dataset.rev))]
+        .filter(tr => mdrAlbumPasses(tr) && (!mdrFilterStatus || tr.dataset.status === mdrFilterStatus)).map(tr => tr.dataset.rev))]
         .sort((a, b) => a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'ru', { numeric: true }));
       if (!revs.length) return alert('Листов, подходящих под выбранные фильтры, нет.');
       const idx = mdrFilterRevision === null ? -1 : revs.indexOf(mdrFilterRevision);
