@@ -201,6 +201,12 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 .chat-sidebar-item.disabled{color:var(--muted);cursor:default;}
 .chat-sidebar-item.disabled:hover{background:none;}
 .chat-sidebar-item .csi-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Аватар-кружок слева: первая буква имени на цветном фоне — синий/розовый
+   по полу сотрудника (вкладка «Пользователи»), серый, если пол не указан */
+.csi-icon{flex-shrink:0;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;background:var(--muted);}
+.csi-icon.male{background:#3b82f6;}
+.csi-icon.female{background:#ec4899;}
+.csi-icon.group{background:none;font-size:16px;}
 .chat-sidebar-item.has-unread{font-weight:700;color:#fff;}
 .csi-unread{flex-shrink:0;background:var(--red);color:#fff;font-size:10px;font-weight:700;line-height:1;min-width:16px;height:16px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;}
 .chat-panel{flex:1;display:flex;flex-direction:column;min-width:0;}

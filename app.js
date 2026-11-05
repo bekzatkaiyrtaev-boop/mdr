@@ -2476,7 +2476,14 @@ function renderUsersTab(){
           const st = filled.get((e.full_name || '').trim().toLowerCase());
           return `
           <tr data-id="${e.id}">
-            <td><input type="text" class="text-like eName" data-id="${e.id}" value="${esc(e.full_name||'')}" placeholder="ФИО" style="width:100%;"></td>
+            <td>
+              <input type="text" class="text-like eName" data-id="${e.id}" value="${esc(e.full_name||'')}" placeholder="ФИО" style="width:100%;">
+              <select class="eGender" data-id="${e.id}" title="Пол — только чтобы раскрасить иконку в списке чата" style="width:auto;font-size:11px;margin-top:2px;">
+                <option value="" ${!e.gender ? 'selected' : ''}>Пол: —</option>
+                <option value="m" ${e.gender === 'm' ? 'selected' : ''}>Пол: М</option>
+                <option value="f" ${e.gender === 'f' ? 'selected' : ''}>Пол: Ж</option>
+              </select>
+            </td>
             <td><input type="email" class="text-like eEmail" data-id="${e.id}" value="${esc(e.email||'')}" placeholder="email" style="width:100%;"></td>
             <td class="muted" style="font-size:12px;">${empCodes.length ? esc(empCodes.join(', ')) : ''}</td>
             <td>
@@ -3102,6 +3109,14 @@ function bindTabEvents(id){
       renderTab(activeTab);
     }));
 
+    document.querySelectorAll('.eGender').forEach(el => el.addEventListener('change', async () => {
+      const id2 = el.dataset.id;
+      const gender = el.value || null;
+      await dbWrite(sb.from('employees').update({ gender }).eq('id', id2));
+      const e = employees.find(x => x.id === id2);
+      if (e) e.gender = gender;
+    }));
+
     document.querySelectorAll('.eRole').forEach(el => el.addEventListener('change', async () => {
       const id2 = el.dataset.id;
       const role = el.value;
@@ -3287,8 +3302,17 @@ function chatSidebarEntries(){
     .filter(e => e.role !== 'viewer')
     .map(e => {
       const p = allProfiles.find(x => (x.email || '').toLowerCase() === (e.email || '').toLowerCase());
-      return { name: e.full_name || e.email || t('Без имени','Unnamed'), profileId: p ? p.id : null };
+      return { name: e.full_name || e.email || t('Без имени','Unnamed'), profileId: p ? p.id : null, gender: e.gender || null };
     });
+}
+
+// Иконка-аватар в списке слева: первая буква имени на цветном кружке —
+// синий для мужчин, розовый для женщин (поле "Пол" во вкладке
+// «Пользователи»), серый, если пол не указан
+function genderAvatarHtml(name, gender){
+  const initial = esc((name || '?').trim().charAt(0).toUpperCase() || '?');
+  const cls = gender === 'm' ? ' male' : gender === 'f' ? ' female' : '';
+  return `<span class="csi-icon${cls}">${initial}</span>`;
 }
 
 function renderChatTab(){
@@ -3297,17 +3321,17 @@ function renderChatTab(){
     <div class="chat-sidebar">
       <div class="chat-sidebar-title">${t('Чаты','Chats')}</div>
       <div class="chat-sidebar-item${activeChatChannel === 'group' ? ' active' : ''}" data-channel="group">
-        <span class="csi-icon">💬</span><span class="csi-name">${t('Общий чат','Group chat')}</span>
+        <span class="csi-icon group">💬</span><span class="csi-name">${t('Общий чат','Group chat')}</span>
       </div>
       ${entries.map(en => {
         if (!en.profileId){
           return `<div class="chat-sidebar-item disabled" title="${t('Ещё не зарегистрирован в МДР','Not registered in MDR yet')}">
-             <span class="csi-icon">👤</span><span class="csi-name">${esc(en.name)}</span>
+             ${genderAvatarHtml(en.name, en.gender)}<span class="csi-name">${esc(en.name)}</span>
            </div>`;
         }
         const unread = unreadCountFrom(en.profileId);
         return `<div class="chat-sidebar-item${activeChatChannel === en.profileId ? ' active' : ''}${unread ? ' has-unread' : ''}" data-channel="${en.profileId}">
-             <span class="csi-icon">👤</span><span class="csi-name">${esc(en.name)}</span>
+             ${genderAvatarHtml(en.name, en.gender)}<span class="csi-name">${esc(en.name)}</span>
              ${unread ? `<span class="csi-unread">${unread}</span>` : ''}
            </div>`;
       }).join('')}
