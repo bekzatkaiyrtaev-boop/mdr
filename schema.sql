@@ -373,6 +373,8 @@ create table public.sheets (
                           -- в MDR ("Ревизия") просто отображается, не редактируется там
   edition text,           -- "Редакция" — задаётся прямо в MDR (обычно R01/R02/A1/A2/A3)
   designation text,       -- обозначение листа
+  is_attachment boolean not null default false, -- прилагаемый документ альбома (вне нумерации листов, идёт в конце)
+  attachment_designation text,  -- его обозначение (вводится вручную)
   customer_designation text, -- "Обозначение Hebei" — задаётся во вкладке "Состав разделов", в MDR справа
   customer_revision text,    -- "Ревизия Hebei" — то же
   comment text,           -- комментарии к листу

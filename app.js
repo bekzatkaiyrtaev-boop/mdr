@@ -1014,6 +1014,9 @@ function parseSheetCompContainer(){
 // листы без номера в начале — в конец списка, по порядку добавления
 function sortSheetsByNumber(list){
   return [...list].sort((a, b) => {
+    // прилагаемые документы всегда идут в конце, после листов основного альбома
+    if (!!a.is_attachment !== !!b.is_attachment) return a.is_attachment ? 1 : -1;
+    if (a.is_attachment && b.is_attachment) return a.sort_order - b.sort_order;
     const na = parseFloat((a.name_ru||'').trim().match(/^(\d+(?:[.,]\d+)?)/)?.[1]?.replace(',', '.'));
     const nb = parseFloat((b.name_ru||'').trim().match(/^(\d+(?:[.,]\d+)?)/)?.[1]?.replace(',', '.'));
     if (isNaN(na) && isNaN(nb)) return a.sort_order - b.sort_order;
@@ -1229,6 +1232,7 @@ function renderSheetCompDetail(){
       <span class="title" style="color:#fff;">${esc(ownerLabel)} — ${esc(marker)} ${esc(t(d.name_ru,d.name_en)||'')}</span>
       <div style="display:flex;gap:8px;">
         <button class="btn small secondary" id="btnTitulSheet" title="Открыть титульный лист альбома (2 страницы) в новой вкладке для печати">🖨 Титульный лист</button>
+        ${canEdit ? `<button class="btn small secondary" id="btnAddAttachment" title="Документ, прилагаемый к основному альбому (вне нумерации листов): обозначение и наименование">+ добавить прилагаемый документ</button>` : ''}
         ${canEdit ? `<button class="btn small" id="btnAddSheet">+ добавить лист</button>` : ''}
       </div>
     </div>
@@ -1239,8 +1243,9 @@ function renderSheetCompDetail(){
         </colgroup>
         <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th id="scHeaderComment" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Примечания</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col" id="scHeaderCustomerDesignation" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
         ${rows.length ? rows.map(s => `
-          <tr data-id="${s.id}">
+          <tr data-id="${s.id}" ${s.is_attachment ? 'class="att-row"' : ''}>
             <td>
+              ${s.is_attachment ? '<div class="att-badge">📎 Прилагаемый документ</div>' : ''}
               <input type="text" class="text-like sName lang-ru" data-id="${s.id}" value="${esc(s.name_ru||'')}" placeholder="RU" ${canEdit?'':'disabled'} style="display:block;width:100%;">
               <div class="lang-en" style="display:flex;align-items:center;gap:4px;">
                 <input type="text" class="text-like sNameEn" data-id="${s.id}" value="${esc(s.name_en||'')}" placeholder="EN" ${canEdit?'':'disabled'} style="flex:1;min-width:0;font-size:12px;color:var(--muted);">
@@ -1249,7 +1254,9 @@ function renderSheetCompDetail(){
             </td>
             <td><input type="text" class="text-like sFormat" data-id="${s.id}" value="${esc(s.format||'')}" list="sheetFormatSuggestions" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td><input type="text" class="text-like sRevision" data-id="${s.id}" value="${esc(s.revision||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
-            <td class="muted" style="font-family:var(--mono);font-size:12px;" title="Считается автоматически: Номер договора-Номер по ГП-Шифр альбома">${esc(designation)}</td>
+            ${s.is_attachment
+              ? `<td><input type="text" class="text-like sAttDesignation" data-id="${s.id}" value="${esc(s.attachment_designation||'')}" placeholder="обозначение" ${canEdit?'':'disabled'} style="width:100%;font-family:var(--mono);font-size:12px;"></td>`
+              : `<td class="muted" style="font-family:var(--mono);font-size:12px;" title="Считается автоматически: Номер договора-Номер по ГП-Шифр альбома">${esc(designation)}</td>`}
             <td><input type="text" class="text-like sComment" data-id="${s.id}" value="${esc(s.comment||'')}" ${canEdit?'':'disabled'} style="width:100%;"></td>
             <td>
               <select class="sStatus" data-id="${s.id}" ${canEdit?'':'disabled'}>
@@ -1312,6 +1319,39 @@ function bindFillDownHeader(headerId, cellSelector, dbColumn, getValue){
     bindSheetCompDetailEvents();
   });
 }
+// окошко «Добавить прилагаемый документ»: обозначение + наименование
+function openAttachmentDialog(onSave){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header"><span class="title">Добавить прилагаемый документ</span></div>
+      <div class="modal-body">
+        <div class="field-grid" style="grid-template-columns:1fr;gap:12px;">
+          <div class="field"><label>Обозначение</label><input type="text" id="attDesignation" placeholder="напр. EMSS25-AEC-200-44-KM1-ПД"></div>
+          <div class="field"><label>Наименование документа</label><input type="text" id="attName" placeholder="наименование"></div>
+          <div class="error-msg hidden" id="attErr"></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button class="btn secondary" id="attCancel">Отмена</button>
+            <button class="btn" id="attSave">Добавить</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  const nameEl = overlay.querySelector('#attName'), desEl = overlay.querySelector('#attDesignation'), errEl = overlay.querySelector('#attErr');
+  desEl.focus();
+  overlay.querySelector('#attCancel').addEventListener('click', close);
+  overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(); });
+  overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); if (e.key === 'Enter') overlay.querySelector('#attSave').click(); });
+  overlay.querySelector('#attSave').addEventListener('click', async () => {
+    const name = nameEl.value.trim(), designation = desEl.value.trim();
+    if (!name){ errEl.textContent = 'Укажите наименование документа.'; errEl.classList.remove('hidden'); nameEl.focus(); return; }
+    close();
+    await onSave({ designation, name });
+  });
+}
 function bindSheetCompDetailEvents(){
   const btnTitul = document.getElementById('btnTitulSheet');
   if (btnTitul) btnTitul.addEventListener('click', () => {
@@ -1353,6 +1393,37 @@ function bindSheetCompDetailEvents(){
     });
   });
 
+  const btnAddAtt = document.getElementById('btnAddAttachment');
+  if (btnAddAtt) btnAddAtt.addEventListener('click', () => openAttachmentDialog(async ({ designation, name }) => {
+    const pd = positionDisciplines.find(x => x.id === sheetCompAlbumId);
+    if (!pd) return;
+    const { kind, id } = parseSheetCompContainer();
+    const rows = sheets.filter(s => s.position_discipline_id === sheetCompAlbumId);
+    const nextOrder = rows.length ? Math.max(...rows.map(s => s.sort_order)) + 1 : 0;
+    const { data: inserted, error } = await sb.from('sheets').insert({
+      position_id: kind === 'pos' ? id : null,
+      discipline_code: pd.discipline_code,
+      position_discipline_id: sheetCompAlbumId,
+      sort_order: nextOrder,
+      created_by: profile.id,
+      is_attachment: true,
+      attachment_designation: designation || null,
+      name_ru: name,
+    }).select().single();
+    if (error){ alert('Ошибка базы данных: ' + error.message); throw error; }
+    sheets.push(inserted);
+    document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
+    bindSheetCompDetailEvents();
+    // черновой автоперевод наименования на EN, как у обычных листов
+    const translated = await translateRuToEn(name);
+    if (translated){
+      await dbWrite(sb.from('sheets').update({ name_en: translated }).eq('id', inserted.id));
+      inserted.name_en = translated;
+      document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
+      bindSheetCompDetailEvents();
+    }
+  }));
+
   const btnAdd = document.getElementById('btnAddSheet');
   if (btnAdd) btnAdd.addEventListener('click', async () => {
     const pd = positionDisciplines.find(x => x.id === sheetCompAlbumId);
@@ -1373,7 +1444,7 @@ function bindSheetCompDetailEvents(){
     bindSheetCompDetailEvents();
   });
 
-  document.querySelectorAll('.sName, .sNameEn, .sFormat, .sRevision, .sComment, .sCustomerDesignation, .sCustomerRevision').forEach(el => el.addEventListener('change', async () => {
+  document.querySelectorAll('.sName, .sNameEn, .sFormat, .sRevision, .sComment, .sAttDesignation, .sCustomerDesignation, .sCustomerRevision').forEach(el => el.addEventListener('change', async () => {
     const id = el.dataset.id;
     const payload = {
       name_ru: document.querySelector(`.sName[data-id="${id}"]`).value.trim() || null,
@@ -1385,6 +1456,8 @@ function bindSheetCompDetailEvents(){
       customer_revision: document.querySelector(`.sCustomerRevision[data-id="${id}"]`).value.trim() || null,
       updated_at: new Date().toISOString(),
     };
+    const attEl = document.querySelector(`.sAttDesignation[data-id="${id}"]`);
+    if (attEl) payload.attachment_designation = attEl.value.trim() || null;
     await dbWrite(sb.from('sheets').update(payload).eq('id', id));
     const s = sheets.find(x => x.id === id);
     if (s) Object.assign(s, payload);
@@ -1822,10 +1895,10 @@ function discSheetRowsHtml(discs, owner){
       </tr>`);
     sheetRows.forEach((s) => {
       rows.push(`
-      <tr class="mdr-doc-row" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}" data-rev="${esc((s.revision||'').trim())}">
+      <tr class="mdr-doc-row${s.is_attachment ? ' mdr-attach' : ''}" ${ownerAttr} data-pdid="${pd.id}" data-code="${esc(pd.discipline_code)}" data-resp="${esc(responsibleName)}" data-rev="${esc((s.revision||'').trim())}">
         <td><input type="text" class="text-like sManualNum" data-id="${s.id}" value="${esc(s.manual_number||'')}" placeholder="—" style="width:100%;"></td>
         <td></td>
-        <td style="padding-left:80px;">${esc(t(s.name_ru, s.name_en) || '—')}</td>
+        <td style="padding-left:80px;">${s.is_attachment ? '<span class="att-tag">📎 ' + esc(t('Прилагаемый документ', 'Attached document')) + '</span> ' : ''}${esc(t(s.name_ru, s.name_en) || '—')}${s.is_attachment && s.attachment_designation ? ` <span style="font-family:var(--mono);font-size:11px;font-weight:400;">(${esc(s.attachment_designation)})</span>` : ''}</td>
         <td>${esc(s.comment||'')}</td>
         <td></td>
         <td class="muted" title="Задаётся во вкладке «Состав разделов»">${esc(s.revision||'')}</td>
@@ -1865,13 +1938,13 @@ function mdrExcelDiscSheetRows(discs, owner){
     sortSheetsByNumber(sheets.filter(s => s.position_discipline_id === pd.id)).forEach(s => {
       rows.push(`
       <tr>
-        <td style="${XL_TD}"></td>
-        <td style="${XL_TD}"></td>
-        <td style="${XL_TD}">${esc(t(s.name_ru, s.name_en) || '—')}</td>
-        <td style="${XL_TD}">${esc(s.comment||'')}</td>
-        <td style="${XL_TD}"></td>
-        <td style="${XL_TD}">${esc(s.revision||'')}</td>
-        <td style="${XL_TD}">${esc(sheetStatusLabel(s.status))}</td>
+        <td style="${XL_TD}${s.is_attachment ? 'background:#e6f0ff;' : ''}"></td>
+        <td style="${XL_TD}${s.is_attachment ? 'background:#e6f0ff;' : ''}"></td>
+        <td style="${XL_TD}${s.is_attachment ? 'background:#e6f0ff;' : ''}">${s.is_attachment ? '📎 ' + esc(t('Прилагаемый документ', 'Attached document')) + ': ' : ''}${esc(t(s.name_ru, s.name_en) || '—')}${s.is_attachment && s.attachment_designation ? ' (' + esc(s.attachment_designation) + ')' : ''}</td>
+        <td style="${XL_TD}${s.is_attachment ? 'background:#e6f0ff;' : ''}">${esc(s.comment||'')}</td>
+        <td style="${XL_TD}${s.is_attachment ? 'background:#e6f0ff;' : ''}"></td>
+        <td style="${XL_TD}${s.is_attachment ? 'background:#e6f0ff;' : ''}">${esc(s.revision||'')}</td>
+        <td style="${XL_TD}${s.is_attachment ? 'background:#e6f0ff;' : ''}">${esc(sheetStatusLabel(s.status))}</td>
         <td style="${XL_TD}background:#fff2cc;">${esc(s.customer_designation||'')}</td>
         <td style="${XL_TD}background:#fff2cc;">${esc(s.customer_revision||'')}</td>
       </tr>`);
