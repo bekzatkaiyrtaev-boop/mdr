@@ -2502,7 +2502,11 @@ function computeStats(){
   const sheetsByStatus = Object.fromEntries(statusKeys.map(k => [k, 0]));
   let sheetsOtherStatus = 0;
   const statusesByAlbum = new Map(); // pd.id → Set статусов его листов
-  sheets.forEach(s => {
+  // «прилагаемые документы» альбома хранятся в той же таблице sheets (is_attachment) — но это не
+  // листы: в счётчик листов и в статусы не входят, считаются отдельно
+  const regularSheets = sheets.filter(s => !s.is_attachment);
+  const attachmentsCount = sheets.length - regularSheets.length;
+  regularSheets.forEach(s => {
     if (s.status in sheetsByStatus) sheetsByStatus[s.status] += 1; else sheetsOtherStatus += 1;
     if (!statusesByAlbum.has(s.position_discipline_id)) statusesByAlbum.set(s.position_discipline_id, new Set());
     statusesByAlbum.get(s.position_discipline_id).add(s.status);
@@ -2532,7 +2536,7 @@ function computeStats(){
 
   return {
     volumes: volumes.length, positions: positions.length, disciplines: realDisciplines.length,
-    albums: positionDisciplines.length, albumsInPositions, albumsInVolumes, sheets: sheets.length,
+    albums: positionDisciplines.length, albumsInPositions, albumsInVolumes, sheets: regularSheets.length, attachments: attachmentsCount,
     sheetsByStatus, sheetsOtherStatus, albumsByStatus, albumsNoSheets, albumsMixed, albumsOtherStatus,
     usersTotal: people.length, usersByRole,
     usersRegistered: people.filter(u => u.registered).length,
@@ -2567,6 +2571,7 @@ function renderStatsTab(){
       ${card(s.albumsInPositions, 'Альбомов в позициях')}
       ${card(s.albumsInVolumes, 'Альбомов в отдельных томах')}
       ${card(s.sheets, 'Листов', 'во всех альбомах')}
+      ${card(s.attachments, 'Прилагаемых документов', 'не входят в листы и статусы')}
     </div></div>
   </div>
 
