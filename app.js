@@ -161,6 +161,8 @@ async function init(){
   await loadAll();
   await fetchChatData();
   subscribeChatRealtime();
+  await fetchDmData();
+  subscribeDmRealtime();
   await fetchTicker();
   renderTickerBar();
   subscribeTickerRealtime();
@@ -3256,21 +3258,60 @@ function renderTickerAdminPanel(){
   </div>`;
 }
 
+// Список слева: общий чат первым (как «главный»), дальше все участники
+// кроме наблюдателей и самого себя — клик переключает канал (см. activeChatChannel)
+function otherChatParticipants(){
+  return allProfiles
+    .filter(p => p.id !== profile.id && p.role !== 'viewer')
+    .sort((a, b) => (a.full_name || a.email || '').localeCompare(b.full_name || b.email || '', 'ru'));
+}
+
 function renderChatTab(){
-  return `<div class="card chat-card">
-    <div class="card-header"><span class="title">${t('Чат','Chat')}</span></div>
-    ${renderTickerAdminPanel()}
-    <div id="chatPinnedSlot">${renderChatPinnedBar()}</div>
-    <div class="chat-messages" id="chatMessagesBox">${chatMessagesInnerHtml()}</div>
+  return `<div class="card chat-card chat-with-sidebar">
+    <div class="chat-sidebar">
+      <div class="chat-sidebar-title">${t('Чаты','Chats')}</div>
+      <div class="chat-sidebar-item${activeChatChannel === 'group' ? ' active' : ''}" data-channel="group">
+        <span class="csi-icon">💬</span><span class="csi-name">${t('Общий чат','Group chat')}</span>
+      </div>
+      ${otherChatParticipants().map(p => `
+        <div class="chat-sidebar-item${activeChatChannel === p.id ? ' active' : ''}" data-channel="${p.id}">
+          <span class="csi-icon">👤</span><span class="csi-name">${esc(p.full_name || p.email)}</span>
+        </div>`).join('')}
+    </div>
+    <div class="chat-panel">${renderChatPanelHtml()}</div>
+  </div>`;
+}
+
+function renderChatPanelHtml(){
+  if (activeChatChannel === 'group'){
+    return `
+      <div class="card-header"><span class="title">${t('Общий чат','Group chat')}</span></div>
+      ${renderTickerAdminPanel()}
+      <div id="chatPinnedSlot">${renderChatPinnedBar()}</div>
+      <div class="chat-messages" id="chatMessagesBox">${chatMessagesInnerHtml()}</div>
+      ${isChatBanned()
+        ? `<div class="chat-banned-note">${t('Администратор ограничил вам участие в чате.','An admin has restricted your access to chat.')}</div>`
+        : `<div class="chat-reply-bar" id="chatReplyBar" hidden></div>
+           <div class="chat-inputrow">
+             <button type="button" class="emoji-btn" id="chatEmojiBtn" title="${t('Смайлики','Emoji')}">🙂</button>
+             <input type="text" id="chatInput" maxlength="2000" placeholder="${t('Написать сообщение...','Type a message...')}">
+             <button class="btn" id="chatSendBtn">${t('Отправить','Send')}</button>
+           </div>`}
+    `;
+  }
+  const other = allProfiles.find(p => p.id === activeChatChannel);
+  const name = other ? esc(other.full_name || other.email) : '';
+  return `
+    <div class="card-header"><span class="title">${name}</span></div>
+    <div class="chat-messages" id="dmMessagesBox">${dmMessagesInnerHtml()}</div>
     ${isChatBanned()
       ? `<div class="chat-banned-note">${t('Администратор ограничил вам участие в чате.','An admin has restricted your access to chat.')}</div>`
-      : `<div class="chat-reply-bar" id="chatReplyBar" hidden></div>
-         <div class="chat-inputrow">
-           <button type="button" class="emoji-btn" id="chatEmojiBtn" title="${t('Смайлики','Emoji')}">🙂</button>
-           <input type="text" id="chatInput" maxlength="2000" placeholder="${t('Написать сообщение...','Type a message...')}">
-           <button class="btn" id="chatSendBtn">${t('Отправить','Send')}</button>
+      : `<div class="chat-inputrow">
+           <button type="button" class="emoji-btn" id="dmEmojiBtn" title="${t('Смайлики','Emoji')}">🙂</button>
+           <input type="text" id="dmInput" maxlength="2000" placeholder="${t('Написать сообщение...','Type a message...')}">
+           <button class="btn" id="dmSendBtn">${t('Отправить','Send')}</button>
          </div>`}
-  </div>`;
+  `;
 }
 
 function renderChatMessages(){
@@ -3307,7 +3348,27 @@ function wireChatPinnedBar(){
   if (unpinBtn) unpinBtn.addEventListener('click', e => { e.stopPropagation(); toggleChatPin(bar.dataset.goto); });
 }
 
+// Слева общий чат + список участников (см. otherChatParticipants) — клик
+// переключает activeChatChannel ('group' или id собеседника) и
+// перерисовывает всю вкладку целиком (проще и надёжнее, чем точечно
+// подменять только панель)
+let activeChatChannel = 'group';
+
 function bindChatEvents(){
+  wireChatSidebar();
+  if (activeChatChannel === 'group') bindGroupChatEvents();
+  else bindDmEvents();
+}
+
+function wireChatSidebar(){
+  document.querySelectorAll('#tabContent [data-channel]').forEach(el => el.addEventListener('click', () => {
+    if (el.dataset.channel === activeChatChannel) return;
+    activeChatChannel = el.dataset.channel;
+    renderTab('chat');
+  }));
+}
+
+function bindGroupChatEvents(){
   const box = document.getElementById('chatMessagesBox');
   if (box){ box.dataset.ready = '1'; box.scrollTop = box.scrollHeight; }
   wireChatMessageButtons();
@@ -3327,6 +3388,196 @@ function bindChatEvents(){
   });
   const tickerStopBtn = document.getElementById('tickerStopBtn');
   if (tickerStopBtn) tickerStopBtn.addEventListener('click', stopTicker);
+}
+
+// ================================================================
+// ---------------- личные сообщения (1:1) ----------------
+// Только текст и реакции — без ответов-цитат и закрепления, в отличие
+// от общего чата. Виден список всех участников кроме наблюдателей
+// (otherChatParticipants). Администратор видит любую переписку на
+// уровне базы (direct_messages_select) — отдельного UI для чтения
+// чужих диалогов здесь нет, это уровень данных, не интерфейса.
+// ================================================================
+let dmMessages = [];
+let dmReactions = [];
+
+async function fetchDmData(){
+  const [{ data: msgs }, { data: reacts }] = await Promise.all([
+    sb.from('direct_messages').select('*').order('created_at'),
+    sb.from('direct_message_reactions').select('*'),
+  ]);
+  dmMessages = msgs || [];
+  dmReactions = reacts || [];
+}
+
+function subscribeDmRealtime(){
+  if (isViewer()) return;
+  sb.channel('direct-messages')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, onDmRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_message_reactions' }, onDmRealtimeChange)
+    .subscribe();
+}
+async function onDmRealtimeChange(){
+  await fetchDmData();
+  if (activeTab === 'chat' && activeChatChannel !== 'group') renderDmMessages();
+}
+
+function currentDmThread(){
+  const other = activeChatChannel;
+  return dmMessages
+    .filter(m => (m.sender_id === profile.id && m.recipient_id === other) || (m.sender_id === other && m.recipient_id === profile.id))
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+}
+
+function dmMessagesInnerHtml(){
+  const thread = currentDmThread();
+  return thread.length
+    ? thread.map(renderDmBubble).join('')
+    : `<div class="muted" style="padding:20px;text-align:center">${t('Сообщений пока нет — напишите первым.','No messages yet — write the first one.')}</div>`;
+}
+
+function renderDmBubble(m){
+  const own = m.sender_id === profile.id;
+  const authorName = esc(profileName(m.sender_id));
+  const groups = {};
+  dmReactions.filter(r => r.message_id === m.id).forEach(r => { (groups[r.emoji] = groups[r.emoji] || []).push(r); });
+  const pills = Object.keys(groups).map(em => {
+    const list = groups[em];
+    const mine = list.some(r => r.user_id === profile.id);
+    return `<button type="button" class="reaction-pill${mine ? ' mine' : ''}" data-dm-reactors="${m.id}" data-emoji="${em}">${em}<span class="rp-count">${list.length}</span></button>`;
+  }).join('');
+  const addBtn = `<button type="button" class="react-add-btn" data-dm-react-add="${m.id}" title="${t('Поставить реакцию','Add reaction')}">🙂</button>`;
+  return `<div class="chat-bubble ${own ? 'own' : 'other'}" data-msgid="${m.id}">
+    <div class="cb-text">${chatLinkify(esc(m.text))}</div>
+    <div class="cb-reactions">${pills}${addBtn}</div>
+    <div class="cb-meta"><span class="cb-author">${authorName}</span> · ${fmtChatDate(m.created_at)}</div>
+  </div>`;
+}
+
+function renderDmMessages(){
+  const box = document.getElementById('dmMessagesBox');
+  if (!box) return;
+  const firstRender = !box.dataset.ready;
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  const prevTop = box.scrollTop;
+  box.dataset.ready = '1';
+  box.innerHTML = dmMessagesInnerHtml();
+  wireDmMessageButtons();
+  box.scrollTop = (firstRender || nearBottom) ? box.scrollHeight : prevTop;
+}
+
+function wireDmMessageButtons(){
+  const box = document.getElementById('dmMessagesBox');
+  if (!box) return;
+  box.querySelectorAll('[data-dm-react-add]').forEach(b => b.addEventListener('click', e => openDmReactionPicker(e, b.dataset.dmReactAdd)));
+  box.querySelectorAll('[data-dm-reactors]').forEach(b => b.addEventListener('click', e => showDmReactors(e, b.dataset.dmReactors, b.dataset.emoji)));
+}
+
+function bindDmEvents(){
+  const box = document.getElementById('dmMessagesBox');
+  if (box){ box.dataset.ready = '1'; box.scrollTop = box.scrollHeight; }
+  wireDmMessageButtons();
+  const input = document.getElementById('dmInput');
+  const sendBtn = document.getElementById('dmSendBtn');
+  if (sendBtn) sendBtn.addEventListener('click', sendDmMessage);
+  if (input) input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendDmMessage(); }
+  });
+  const emojiBtn = document.getElementById('dmEmojiBtn');
+  if (emojiBtn) emojiBtn.addEventListener('click', toggleDmComposerEmojiPicker);
+}
+
+async function sendDmMessage(){
+  const input = document.getElementById('dmInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const recipientId = activeChatChannel;
+  const sendBtn = document.getElementById('dmSendBtn');
+  if (sendBtn) sendBtn.disabled = true;
+  await dbWrite(sb.from('direct_messages').insert({ sender_id: profile.id, recipient_id: recipientId, text }));
+  input.value = '';
+  await fetchDmData();
+  renderDmMessages();
+  if (sendBtn) sendBtn.disabled = false;
+  input.focus();
+}
+
+function toggleDmComposerEmojiPicker(e){
+  e.stopPropagation();
+  closeChatPopups();
+  const box = document.createElement('div');
+  box.className = 'reaction-picker';
+  box.innerHTML = CHAT_EMOJI.map(em => `<button type="button" class="emoji-item">${em}</button>`).join('');
+  document.body.appendChild(box);
+  const r = e.currentTarget.getBoundingClientRect();
+  box.style.left = Math.max(8, r.left) + 'px';
+  box.style.top = (r.top - box.offsetHeight - 6) + 'px';
+  box.querySelectorAll('.emoji-item').forEach(btn => btn.addEventListener('click', () => {
+    const input = document.getElementById('dmInput');
+    if (input){ input.value += btn.textContent; input.focus(); }
+    box.remove();
+  }));
+  setTimeout(() => {
+    document.addEventListener('click', function closeOnce(ev){
+      if (!box.contains(ev.target)){ box.remove(); document.removeEventListener('click', closeOnce); }
+    });
+  }, 0);
+}
+
+function openDmReactionPicker(e, msgId){
+  e.stopPropagation();
+  closeChatPopups();
+  const box = document.createElement('div');
+  box.className = 'reaction-picker';
+  box.innerHTML = CHAT_EMOJI.map(em => `<button type="button" class="emoji-item">${em}</button>`).join('');
+  document.body.appendChild(box);
+  const r = e.currentTarget.getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8)) + 'px';
+  box.style.top = (r.top - box.offsetHeight - 6) + 'px';
+  box.querySelectorAll('.emoji-item').forEach(btn => btn.addEventListener('click', async ev => {
+    ev.stopPropagation();
+    await toggleDmReaction(msgId, btn.textContent);
+    box.remove();
+  }));
+  setTimeout(() => {
+    document.addEventListener('click', function closeOnce(ev){
+      if (!box.contains(ev.target)){ box.remove(); document.removeEventListener('click', closeOnce); }
+    });
+  }, 0);
+}
+
+async function toggleDmReaction(msgId, emoji){
+  const mine = dmReactions.find(r => r.message_id === msgId && r.user_id === profile.id);
+  if (mine && mine.emoji === emoji){
+    await dbWrite(sb.from('direct_message_reactions').delete().eq('id', mine.id));
+  } else if (mine){
+    await dbWrite(sb.from('direct_message_reactions').update({ emoji }).eq('id', mine.id));
+  } else {
+    await dbWrite(sb.from('direct_message_reactions').insert({ message_id: msgId, user_id: profile.id, emoji }));
+  }
+  await fetchDmData();
+  renderDmMessages();
+}
+
+function showDmReactors(e, msgId, emoji){
+  e.stopPropagation();
+  closeChatPopups();
+  const names = dmReactions.filter(r => r.message_id === msgId && r.emoji === emoji).map(r => profileName(r.user_id));
+  if (!names.length) return;
+  const box = document.createElement('div');
+  box.className = 'reactors-popup';
+  box.innerHTML = `<div class="rp-title">${emoji} — ${t('кто поставил','who reacted')}</div>` +
+    names.map(n => `<div class="rp-name">${esc(n)}</div>`).join('');
+  document.body.appendChild(box);
+  const r = e.currentTarget.getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8)) + 'px';
+  box.style.top = (r.bottom + 6) + 'px';
+  setTimeout(() => {
+    document.addEventListener('click', function closeOnce(ev){
+      if (!box.contains(ev.target)){ box.remove(); document.removeEventListener('click', closeOnce); }
+    });
+  }, 0);
 }
 
 async function sendChatMessage(){
