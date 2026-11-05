@@ -198,6 +198,8 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 .chat-sidebar-item{padding:10px 14px;cursor:pointer;font-size:13px;color:var(--text);display:flex;align-items:center;gap:8px;border-left:2px solid transparent;}
 .chat-sidebar-item:hover{background:var(--surface2);}
 .chat-sidebar-item.active{background:var(--surface2);border-left-color:var(--accent);color:#fff;font-weight:600;}
+.chat-sidebar-item.disabled{color:var(--muted);cursor:default;}
+.chat-sidebar-item.disabled:hover{background:none;}
 .chat-sidebar-item .csi-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .chat-panel{flex:1;display:flex;flex-direction:column;min-width:0;}
 @media(max-width:760px){

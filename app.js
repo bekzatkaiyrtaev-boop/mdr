@@ -3272,23 +3272,37 @@ function renderTickerAdminPanel(){
 
 // Список слева: общий чат первым (как «главный»), дальше все участники
 // кроме наблюдателей и самого себя — клик переключает канал (см. activeChatChannel)
-function otherChatParticipants(){
-  return allProfiles
-    .filter(p => p.id !== profile.id && p.role !== 'viewer')
-    .sort((a, b) => (a.full_name || a.email || '').localeCompare(b.full_name || b.email || '', 'ru'));
+// Тот же список и тот же порядок, что и во вкладке «Пользователи»
+// (sortedEmployeesByRole — администратор, ГИП, помощник ГИПа, инженер),
+// только без наблюдателей (это внешние, им в чате компании делать нечего).
+// Сотрудник может быть ещё не зарегистрирован в МДР (нет строки в profiles —
+// значит, нет id для direct_messages.recipient_id) — тогда показываем его
+// в списке серым, без возможности написать, пока не войдёт в систему сам раз.
+function chatSidebarEntries(){
+  return sortedEmployeesByRole()
+    .filter(e => e.role !== 'viewer')
+    .map(e => {
+      const p = allProfiles.find(x => (x.email || '').toLowerCase() === (e.email || '').toLowerCase());
+      return { name: e.full_name || e.email || t('Без имени','Unnamed'), profileId: p ? p.id : null };
+    });
 }
 
 function renderChatTab(){
+  const entries = chatSidebarEntries();
   return `<div class="card chat-card chat-with-sidebar">
     <div class="chat-sidebar">
       <div class="chat-sidebar-title">${t('Чаты','Chats')}</div>
       <div class="chat-sidebar-item${activeChatChannel === 'group' ? ' active' : ''}" data-channel="group">
         <span class="csi-icon">💬</span><span class="csi-name">${t('Общий чат','Group chat')}</span>
       </div>
-      ${otherChatParticipants().map(p => `
-        <div class="chat-sidebar-item${activeChatChannel === p.id ? ' active' : ''}" data-channel="${p.id}">
-          <span class="csi-icon">👤</span><span class="csi-name">${esc(p.full_name || p.email)}</span>
-        </div>`).join('')}
+      ${entries.map(en => en.profileId
+        ? `<div class="chat-sidebar-item${activeChatChannel === en.profileId ? ' active' : ''}" data-channel="${en.profileId}">
+             <span class="csi-icon">👤</span><span class="csi-name">${esc(en.name)}</span>
+           </div>`
+        : `<div class="chat-sidebar-item disabled" title="${t('Ещё не зарегистрирован в МДР','Not registered in MDR yet')}">
+             <span class="csi-icon">👤</span><span class="csi-name">${esc(en.name)}</span>
+           </div>`
+      ).join('')}
     </div>
     <div class="chat-panel">${renderChatPanelHtml()}</div>
   </div>`;
