@@ -159,6 +159,8 @@ async function init(){
   updateLangButtons();
 
   await loadAll();
+  await fetchChatData();
+  subscribeChatRealtime();
   buildTabs();
 }
 
@@ -215,6 +217,7 @@ function buildTabs(){
   tabs.push(['sections', 'Создание разделов']);
   tabs.push(['sheetcomp', 'Состав разделов']);
   tabs.push(['mdr', 'MDR']);
+  tabs.push(['chat', 'Чат']);
   tabs.push(['assignments', 'Поручения']);
   if (isFullAccess()) tabs.push(['users', 'Пользователи']);
   if (isFullAccess()) tabs.push(['stats', 'Статистика']);
@@ -243,6 +246,7 @@ function renderTab(id){
   else if (id === 'sections') c.innerHTML = renderSectionsTab();
   else if (id === 'sheetcomp') c.innerHTML = renderSheetCompTab();
   else if (id === 'mdr') c.innerHTML = renderMdrTab();
+  else if (id === 'chat') c.innerHTML = renderChatTab();
   else if (id === 'assignments') c.innerHTML = renderAssignmentsTab();
   else if (id === 'users') c.innerHTML = renderUsersTab();
   else if (id === 'stats' && isFullAccess()) c.innerHTML = renderStatsTab();
@@ -3123,6 +3127,313 @@ function bindTabEvents(id){
       renderTab('stats');
     });
   }
+  else if (id === 'chat') bindChatEvents();
+}
+
+// ================================================================
+// ---------------- чат ----------------
+// Общий чат внутри МДР: реакции, ответы (цитата), закрепление и бан
+// из чата — администратор (ГИП/помощник ГИПа, см. isFullAccess()).
+// Наблюдателю вкладка не показывается (buildTabs/renderTab это уже
+// обеспечивают), доступ дополнительно проверяется в БД (RLS, см.
+// migration_034_chat.sql) — так же, как и весь остальной МДР.
+// ================================================================
+let chatMessages = [];
+let chatReactions = [];
+let chatBannedIds = new Set();
+let chatReplyingTo = null; // { id, authorName, text } — на что сейчас отвечаем
+
+// Тот же набор смайликов, что и везде в приложении — реакция (тап) ставит
+// её заново, повторный тап тем же смайликом снимает реакцию
+const CHAT_EMOJI = [
+  '😀','😁','😂','🤣','😊','🙂','😉','😍','🥰','😘','😎','🤔','🙄','😴','😭',
+  '😢','😡','🤬','😱','😨','😰','🥺','😅','😬','🙃','🤗','🤩','😏','🥳','😷',
+  '👍','👎','👌','🤞','✌️','🤝','🙏','👏','💪','🤘','👋','✋','🤙','👊','🖐️',
+  '❤️','🧡','💛','💚','💙','💜',
+  '✅','❌','⚠️','❗','❓','💯','🔥','⭐','💡','📌','📎','🔔','🚀','⏰','🕐',
+];
+
+function profileName(id){
+  const p = allProfiles.find(x => x.id === id);
+  return (p && (p.full_name || p.email)) || t('Участник','Member');
+}
+function isChatBanned(){ return chatBannedIds.has(profile.id); }
+function canPostChat(){ return !isViewer() && !isChatBanned(); }
+function chatLinkify(escapedText){
+  return escapedText.replace(/(https?:\/\/[^\s<]+)/g, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+}
+function fmtChatDate(iso){
+  try { return new Date(iso).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+  catch(e){ return ''; }
+}
+
+async function fetchChatData(){
+  const [{ data: msgs }, { data: reacts }, { data: banned }] = await Promise.all([
+    sb.from('chat_messages').select('*').order('created_at'),
+    sb.from('chat_reactions').select('*'),
+    sb.from('chat_banned').select('user_id'),
+  ]);
+  chatMessages = msgs || [];
+  chatReactions = reacts || [];
+  chatBannedIds = new Set((banned || []).map(b => b.user_id));
+}
+
+function subscribeChatRealtime(){
+  if (isViewer()) return; // наблюдателю чат недоступен — и читать по реалтайму нечего
+  sb.channel('chat-room')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, onChatRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_reactions' }, onChatRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_banned' }, onChatRealtimeChange)
+    .subscribe();
+}
+async function onChatRealtimeChange(){
+  await fetchChatData();
+  if (activeTab === 'chat') renderChatMessages();
+}
+
+function chatMessagesInnerHtml(){
+  return chatMessages.length
+    ? chatMessages.map(renderChatBubble).join('')
+    : `<div class="muted" style="padding:20px;text-align:center">${t('Пока нет сообщений — напишите первым.','No messages yet — write the first one.')}</div>`;
+}
+
+function renderChatBubble(m){
+  const own = m.author_id === profile.id;
+  const authorName = esc(profileName(m.author_id));
+  const groups = {};
+  chatReactions.filter(r => r.message_id === m.id).forEach(r => { (groups[r.emoji] = groups[r.emoji] || []).push(r); });
+  const pills = Object.keys(groups).map(em => {
+    const list = groups[em];
+    const mine = list.some(r => r.user_id === profile.id);
+    return `<button type="button" class="reaction-pill${mine ? ' mine' : ''}" data-reactors="${m.id}" data-emoji="${em}">${em}<span class="rp-count">${list.length}</span></button>`;
+  }).join('');
+  const addBtn = canPostChat() ? `<button type="button" class="react-add-btn" data-react-add="${m.id}" title="${t('Поставить реакцию','Add reaction')}">🙂</button>` : '';
+  const replyBtn = canPostChat() ? ` <button type="button" class="reply-btn" data-reply="${m.id}" title="${t('Ответить','Reply')}">↩</button>` : '';
+  const adminBtns = isFullAccess() ? `
+    <button type="button" class="mod-btn" data-pin-chat="${m.id}" title="${m.pinned ? t('Открепить','Unpin') : t('Закрепить','Pin')}">${m.pinned ? '📌' : '📍'}</button>
+    <button type="button" class="mod-btn" data-del-chat="${m.id}" title="${t('Удалить','Delete')}">🗑</button>
+    ${m.author_id !== profile.id ? `<button type="button" class="mod-btn" data-ban-chat="${m.author_id}" title="${t('Заблокировать в чате','Ban from chat')}">🚫</button>` : ''}
+  ` : '';
+  const orig = m.reply_to_id ? chatMessages.find(x => x.id === m.reply_to_id) : null;
+  const replyQuote = orig
+    ? `<div class="cb-reply-quote" data-goto="${orig.id}"><span class="cb-rq-author">${esc(profileName(orig.author_id))}</span><span class="cb-rq-text">${esc(orig.text.slice(0, 120))}</span></div>`
+    : '';
+  return `<div class="chat-bubble ${own ? 'own' : 'other'}" data-msgid="${m.id}">
+    ${replyQuote}
+    <div class="cb-text">${chatLinkify(esc(m.text))}</div>
+    <div class="cb-reactions">${pills}${addBtn}</div>
+    <div class="cb-meta"><span class="cb-author">${authorName}</span> · ${fmtChatDate(m.created_at)}${replyBtn}${adminBtns}</div>
+  </div>`;
+}
+
+function renderChatPinnedBar(){
+  const pinned = chatMessages.find(m => m.pinned);
+  if (!pinned) return '';
+  return `<div class="chat-pinned-bar" id="chatPinnedBar" data-goto="${pinned.id}">
+    <span class="pb-icon">📌</span>
+    <div class="pb-body"><span class="pb-author">${esc(profileName(pinned.author_id))}</span><span class="pb-text">${esc(pinned.text)}</span></div>
+    ${isFullAccess() ? `<button type="button" class="pb-unpin" id="chatPinnedUnpinBtn" title="${t('Открепить','Unpin')}">✕</button>` : ''}
+  </div>`;
+}
+
+function renderChatTab(){
+  return `<div class="card chat-card">
+    <div class="card-header"><span class="title">${t('Чат','Chat')}</span></div>
+    <div id="chatPinnedSlot">${renderChatPinnedBar()}</div>
+    <div class="chat-messages" id="chatMessagesBox">${chatMessagesInnerHtml()}</div>
+    ${isChatBanned()
+      ? `<div class="chat-banned-note">${t('Администратор ограничил вам участие в чате.','An admin has restricted your access to chat.')}</div>`
+      : `<div class="chat-reply-bar" id="chatReplyBar" hidden></div>
+         <div class="chat-inputrow">
+           <input type="text" id="chatInput" maxlength="2000" placeholder="${t('Написать сообщение...','Type a message...')}">
+           <button class="btn" id="chatSendBtn">${t('Отправить','Send')}</button>
+         </div>`}
+  </div>`;
+}
+
+function renderChatMessages(){
+  const box = document.getElementById('chatMessagesBox');
+  if (!box) return;
+  const firstRender = !box.dataset.ready;
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  const prevTop = box.scrollTop;
+  box.dataset.ready = '1';
+  box.innerHTML = chatMessagesInnerHtml();
+  wireChatMessageButtons();
+  box.scrollTop = (firstRender || nearBottom) ? box.scrollHeight : prevTop;
+  const pinSlot = document.getElementById('chatPinnedSlot');
+  if (pinSlot){ pinSlot.innerHTML = renderChatPinnedBar(); wireChatPinnedBar(); }
+}
+
+function wireChatMessageButtons(){
+  const box = document.getElementById('chatMessagesBox');
+  if (!box) return;
+  box.querySelectorAll('[data-reply]').forEach(b => b.addEventListener('click', () => startChatReply(b.dataset.reply)));
+  box.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => scrollToChatMessage(b.dataset.goto)));
+  box.querySelectorAll('[data-react-add]').forEach(b => b.addEventListener('click', e => openChatReactionPicker(e, b.dataset.reactAdd)));
+  box.querySelectorAll('[data-reactors]').forEach(b => b.addEventListener('click', e => showChatReactors(e, b.dataset.reactors, b.dataset.emoji)));
+  box.querySelectorAll('[data-pin-chat]').forEach(b => b.addEventListener('click', () => toggleChatPin(b.dataset.pinChat)));
+  box.querySelectorAll('[data-del-chat]').forEach(b => b.addEventListener('click', () => deleteChatMessage(b.dataset.delChat)));
+  box.querySelectorAll('[data-ban-chat]').forEach(b => b.addEventListener('click', () => banChatUser(b.dataset.banChat)));
+}
+
+function wireChatPinnedBar(){
+  const bar = document.getElementById('chatPinnedBar');
+  if (bar) bar.addEventListener('click', e => { if (e.target.closest('.pb-unpin')) return; scrollToChatMessage(bar.dataset.goto); });
+  const unpinBtn = document.getElementById('chatPinnedUnpinBtn');
+  if (unpinBtn) unpinBtn.addEventListener('click', e => { e.stopPropagation(); toggleChatPin(bar.dataset.goto); });
+}
+
+function bindChatEvents(){
+  const box = document.getElementById('chatMessagesBox');
+  if (box){ box.dataset.ready = '1'; box.scrollTop = box.scrollHeight; }
+  wireChatMessageButtons();
+  wireChatPinnedBar();
+  const input = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  if (sendBtn) sendBtn.addEventListener('click', sendChatMessage);
+  if (input) input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChatMessage(); }
+  });
+}
+
+async function sendChatMessage(){
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const payload = { author_id: profile.id, text };
+  if (chatReplyingTo) payload.reply_to_id = chatReplyingTo.id;
+  const sendBtn = document.getElementById('chatSendBtn');
+  if (sendBtn) sendBtn.disabled = true;
+  await dbWrite(sb.from('chat_messages').insert(payload));
+  input.value = '';
+  cancelChatReply();
+  await fetchChatData();
+  renderChatMessages();
+  if (sendBtn) sendBtn.disabled = false;
+  input.focus();
+}
+
+function startChatReply(id){
+  const msg = chatMessages.find(m => m.id === id);
+  if (!msg) return;
+  chatReplyingTo = { id, authorName: profileName(msg.author_id), text: msg.text.slice(0, 120) };
+  renderChatReplyBar();
+  document.getElementById('chatInput')?.focus();
+}
+function cancelChatReply(){ chatReplyingTo = null; renderChatReplyBar(); }
+function renderChatReplyBar(){
+  const bar = document.getElementById('chatReplyBar');
+  if (!bar) return;
+  if (!chatReplyingTo){ bar.hidden = true; bar.innerHTML = ''; return; }
+  bar.hidden = false;
+  bar.innerHTML = `<div class="rb-body"><span class="rb-author">${t('Ответ для','Reply to')} ${esc(chatReplyingTo.authorName)}</span><span class="rb-text">${esc(chatReplyingTo.text)}</span></div><button type="button" class="rb-close" id="chatReplyCancelBtn">✕</button>`;
+  document.getElementById('chatReplyCancelBtn').addEventListener('click', cancelChatReply);
+}
+
+function scrollToChatMessage(id){
+  const box = document.getElementById('chatMessagesBox');
+  if (!box) return;
+  const el = box.querySelector(`[data-msgid="${CSS.escape(id)}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
+function closeChatPopups(){
+  document.querySelectorAll('.reaction-picker,.reactors-popup').forEach(e => e.remove());
+}
+
+function openChatReactionPicker(e, msgId){
+  e.stopPropagation();
+  closeChatPopups();
+  const box = document.createElement('div');
+  box.className = 'reaction-picker';
+  box.innerHTML = CHAT_EMOJI.map(em => `<button type="button" class="emoji-item">${em}</button>`).join('');
+  document.body.appendChild(box);
+  const r = e.currentTarget.getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8)) + 'px';
+  box.style.top = (r.top - box.offsetHeight - 6) + 'px';
+  box.querySelectorAll('.emoji-item').forEach(btn => btn.addEventListener('click', async ev => {
+    ev.stopPropagation();
+    await toggleChatReaction(msgId, btn.textContent);
+    box.remove();
+  }));
+  setTimeout(() => {
+    document.addEventListener('click', function closeOnce(ev){
+      if (!box.contains(ev.target)){ box.remove(); document.removeEventListener('click', closeOnce); }
+    });
+  }, 0);
+}
+
+async function toggleChatReaction(msgId, emoji){
+  const mine = chatReactions.find(r => r.message_id === msgId && r.user_id === profile.id);
+  if (mine && mine.emoji === emoji){
+    await dbWrite(sb.from('chat_reactions').delete().eq('id', mine.id));
+  } else if (mine){
+    await dbWrite(sb.from('chat_reactions').update({ emoji }).eq('id', mine.id));
+  } else {
+    await dbWrite(sb.from('chat_reactions').insert({ message_id: msgId, user_id: profile.id, emoji }));
+  }
+  await fetchChatData();
+  renderChatMessages();
+}
+
+function showChatReactors(e, msgId, emoji){
+  e.stopPropagation();
+  closeChatPopups();
+  const names = chatReactions.filter(r => r.message_id === msgId && r.emoji === emoji).map(r => profileName(r.user_id));
+  if (!names.length) return;
+  const box = document.createElement('div');
+  box.className = 'reactors-popup';
+  box.innerHTML = `<div class="rp-title">${emoji} — ${t('кто поставил','who reacted')}</div>` +
+    names.map(n => `<div class="rp-name">${esc(n)}</div>`).join('');
+  document.body.appendChild(box);
+  const r = e.currentTarget.getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8)) + 'px';
+  box.style.top = (r.bottom + 6) + 'px';
+  setTimeout(() => {
+    document.addEventListener('click', function closeOnce(ev){
+      if (!box.contains(ev.target)){ box.remove(); document.removeEventListener('click', closeOnce); }
+    });
+  }, 0);
+}
+
+// Закрепление: снимаем предыдущий закреп (если есть) перед установкой нового —
+// иначе упрёмся в уникальный индекс chat_messages_pinned_unique
+async function toggleChatPin(id){
+  if (!isFullAccess()) return;
+  const msg = chatMessages.find(m => m.id === id);
+  if (!msg) return;
+  if (msg.pinned){
+    await dbWrite(sb.from('chat_messages').update({ pinned: false }).eq('id', id));
+  } else {
+    const current = chatMessages.find(m => m.pinned);
+    if (current) await dbWrite(sb.from('chat_messages').update({ pinned: false }).eq('id', current.id));
+    await dbWrite(sb.from('chat_messages').update({ pinned: true }).eq('id', id));
+  }
+  await fetchChatData();
+  renderChatMessages();
+}
+
+async function deleteChatMessage(id){
+  if (!isFullAccess()) return;
+  if (!confirm(t('Удалить сообщение?','Delete this message?'))) return;
+  await dbWrite(sb.from('chat_messages').delete().eq('id', id));
+  await fetchChatData();
+  renderChatMessages();
+}
+
+async function banChatUser(userId){
+  if (!isFullAccess()) return;
+  const name = profileName(userId);
+  if (!confirm(`${t('Заблокировать в чате','Ban from chat')} «${name}»?`)) return;
+  await dbWrite(sb.from('chat_banned').insert({ user_id: userId, banned_by: profile.id }));
+  await fetchChatData();
+  renderChatMessages();
 }
 
 init();
