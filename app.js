@@ -3137,10 +3137,10 @@ function bindTabEvents(id){
 
 // ================================================================
 // ---------------- чат ----------------
-// Общий чат внутри МДР: реакции, ответы (цитата), закрепление и бан
-// из чата — только у администратора по почте (см. isChatAdmin() ниже),
-// а не у роли ГИП/помощник ГИПа вообще: в чате у всех обычные права
-// поровну, полные — только у самого администратора.
+// Общий чат внутри МДР: реакции, ответы (цитата). Закрепление и бегущая
+// строка — ГИП и помощник ГИПа наравне с администратором (isFullAccess());
+// удаление сообщения и бан из чата — строго сам администратор по почте
+// (isChatAdmin()), не любой ГИП/помощник ГИПа.
 // Наблюдателю вкладка не показывается (buildTabs/renderTab это уже
 // обеспечивают), доступ дополнительно проверяется в БД (RLS, см.
 // migration_034_chat.sql) — так же, как и весь остальной МДР.
@@ -3226,9 +3226,13 @@ function renderChatBubble(m){
   const translation = chatTranslationsVisible.has(m.id)
     ? `<div class="cb-translation">🌐 ${chatTranslations.has(m.id) ? esc(chatTranslations.get(m.id)) : t('Переводим…','Translating…')}</div>`
     : '';
-  const adminBtns = isChatAdmin() ? `
+  // Закрепление и бегущая строка — ГИП и помощник ГИПа наравне с администратором;
+  // удаление и бан — только сам администратор (см. isChatAdmin()/isFullAccess())
+  const pinTickerBtns = isFullAccess() ? `
     <button type="button" class="mod-btn" data-pin-chat="${m.id}" title="${m.pinned ? t('Открепить','Unpin') : t('Закрепить','Pin')}">${m.pinned ? '📌' : '📍'}</button>
     <button type="button" class="mod-btn" data-ticker-chat="${m.id}" title="${t('В бегущую строку','Send to ticker')}">📢</button>
+  ` : '';
+  const adminBtns = isChatAdmin() ? `
     <button type="button" class="mod-btn" data-del-chat="${m.id}" title="${t('Удалить','Delete')}">🗑</button>
     ${m.author_id !== profile.id ? `<button type="button" class="mod-btn" data-ban-chat="${m.author_id}" title="${t('Заблокировать в чате','Ban from chat')}">🚫</button>` : ''}
   ` : '';
@@ -3241,7 +3245,7 @@ function renderChatBubble(m){
     <div class="cb-text">${chatLinkify(esc(m.text))}</div>
     ${translation}
     <div class="cb-reactions">${pills}${addBtn}</div>
-    <div class="cb-meta"><span class="cb-author">${authorName}</span> · ${fmtChatDate(m.created_at)}${replyBtn}${translateBtn}${adminBtns}</div>
+    <div class="cb-meta"><span class="cb-author">${authorName}</span> · ${fmtChatDate(m.created_at)}${replyBtn}${translateBtn}${pinTickerBtns}${adminBtns}</div>
   </div>`;
 }
 
@@ -3251,12 +3255,12 @@ function renderChatPinnedBar(){
   return `<div class="chat-pinned-bar" id="chatPinnedBar" data-goto="${pinned.id}">
     <span class="pb-icon">📌</span>
     <div class="pb-body"><span class="pb-author">${esc(profileName(pinned.author_id))}</span><span class="pb-text">${esc(pinned.text)}</span></div>
-    ${isChatAdmin() ? `<button type="button" class="pb-unpin" id="chatPinnedUnpinBtn" title="${t('Открепить','Unpin')}">✕</button>` : ''}
+    ${isFullAccess() ? `<button type="button" class="pb-unpin" id="chatPinnedUnpinBtn" title="${t('Открепить','Unpin')}">✕</button>` : ''}
   </div>`;
 }
 
 function renderTickerAdminPanel(){
-  if (!isChatAdmin()) return '';
+  if (!isFullAccess()) return '';
   const active = appTicker && appTicker.active && !isTickerExpired(appTicker);
   return `<div class="card-header ticker-admin">
     <span class="title" style="font-size:12px">${t('Бегущая строка','Ticker')}</span>
@@ -3771,7 +3775,7 @@ function showChatReactors(e, msgId, emoji){
 // Закрепление: снимаем предыдущий закреп (если есть) перед установкой нового —
 // иначе упрёмся в уникальный индекс chat_messages_pinned_unique
 async function toggleChatPin(id){
-  if (!isChatAdmin()) return;
+  if (!isFullAccess()) return;
   const msg = chatMessages.find(m => m.id === id);
   if (!msg) return;
   if (msg.pinned){
@@ -3881,7 +3885,7 @@ function renderTickerBar(){
 }
 
 async function startTicker(text, authorName){
-  if (!isChatAdmin()) return;
+  if (!isFullAccess()) return;
   await dbWrite(sb.from('app_ticker').update({
     text: String(text || '').slice(0, 500),
     author_name: authorName || profileName(profile.id),
@@ -3895,14 +3899,14 @@ async function startTicker(text, authorName){
   if (activeTab === 'chat') renderTab('chat');
 }
 async function stopTicker(){
-  if (!isChatAdmin()) return;
+  if (!isFullAccess()) return;
   await dbWrite(sb.from('app_ticker').update({ active: false, updated_at: new Date().toISOString(), updated_by: profile.id }).eq('id', 'main'));
   await fetchTicker();
   renderTickerBar();
   if (activeTab === 'chat') renderTab('chat');
 }
 async function sendChatMessageToTicker(id){
-  if (!isChatAdmin()) return;
+  if (!isFullAccess()) return;
   const msg = chatMessages.find(m => m.id === id);
   if (!msg) return;
   if (!confirm(t('Отправить это сообщение в бегущую строку?','Send this message to the ticker?'))) return;
