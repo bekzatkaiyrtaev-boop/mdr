@@ -216,6 +216,7 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
 .chat-bubble .cb-text a{color:var(--accent);word-break:break-all;}
 .chat-bubble .cb-meta{font-size:10px;color:var(--muted);margin-top:4px;text-align:right;}
 .chat-bubble .cb-meta .cb-author{color:var(--accent);font-weight:700;}
+.cb-translation{margin-top:6px;padding:6px 8px;border-left:2px solid var(--green);background:rgba(125,211,168,.08);border-radius:4px;color:var(--green);font-size:12px;font-style:italic;}
 .chat-banned-note{margin:10px 14px;padding:10px 14px;border:1px solid var(--red);border-radius:8px;color:var(--red);font-size:13px;}
 
 .chat-inputrow{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface2);flex-shrink:0;align-items:center;}

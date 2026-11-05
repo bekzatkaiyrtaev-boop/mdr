@@ -3222,6 +3222,10 @@ function renderChatBubble(m){
   }).join('');
   const addBtn = canPostChat() ? `<button type="button" class="react-add-btn" data-react-add="${m.id}" title="${t('Поставить реакцию','Add reaction')}">🙂</button>` : '';
   const replyBtn = canPostChat() ? ` <button type="button" class="reply-btn" data-reply="${m.id}" title="${t('Ответить','Reply')}">↩</button>` : '';
+  const translateBtn = ` <button type="button" class="reply-btn" data-translate="${m.id}" data-translate-text="${esc(m.text)}" title="${t('Перевести','Translate')}">🌐</button>`;
+  const translation = chatTranslationsVisible.has(m.id)
+    ? `<div class="cb-translation">🌐 ${chatTranslations.has(m.id) ? esc(chatTranslations.get(m.id)) : t('Переводим…','Translating…')}</div>`
+    : '';
   const adminBtns = isChatAdmin() ? `
     <button type="button" class="mod-btn" data-pin-chat="${m.id}" title="${m.pinned ? t('Открепить','Unpin') : t('Закрепить','Pin')}">${m.pinned ? '📌' : '📍'}</button>
     <button type="button" class="mod-btn" data-ticker-chat="${m.id}" title="${t('В бегущую строку','Send to ticker')}">📢</button>
@@ -3235,8 +3239,9 @@ function renderChatBubble(m){
   return `<div class="chat-bubble ${own ? 'own' : 'other'}" data-msgid="${m.id}">
     ${replyQuote}
     <div class="cb-text">${chatLinkify(esc(m.text))}</div>
+    ${translation}
     <div class="cb-reactions">${pills}${addBtn}</div>
-    <div class="cb-meta"><span class="cb-author">${authorName}</span> · ${fmtChatDate(m.created_at)}${replyBtn}${adminBtns}</div>
+    <div class="cb-meta"><span class="cb-author">${authorName}</span> · ${fmtChatDate(m.created_at)}${replyBtn}${translateBtn}${adminBtns}</div>
   </div>`;
 }
 
@@ -3346,6 +3351,7 @@ function wireChatMessageButtons(){
   box.querySelectorAll('[data-del-chat]').forEach(b => b.addEventListener('click', () => deleteChatMessage(b.dataset.delChat)));
   box.querySelectorAll('[data-ban-chat]').forEach(b => b.addEventListener('click', () => banChatUser(b.dataset.banChat)));
   box.querySelectorAll('[data-ticker-chat]').forEach(b => b.addEventListener('click', () => sendChatMessageToTicker(b.dataset.tickerChat)));
+  box.querySelectorAll('[data-translate]').forEach(b => b.addEventListener('click', () => toggleTranslateMessage(b.dataset.translate, b.dataset.translateText)));
 }
 
 function wireChatPinnedBar(){
@@ -3454,10 +3460,15 @@ function renderDmBubble(m){
     return `<button type="button" class="reaction-pill${mine ? ' mine' : ''}" data-dm-reactors="${m.id}" data-emoji="${em}">${em}<span class="rp-count">${list.length}</span></button>`;
   }).join('');
   const addBtn = `<button type="button" class="react-add-btn" data-dm-react-add="${m.id}" title="${t('Поставить реакцию','Add reaction')}">🙂</button>`;
+  const translateBtn = ` <button type="button" class="reply-btn" data-dm-translate="${m.id}" data-translate-text="${esc(m.text)}" title="${t('Перевести','Translate')}">🌐</button>`;
+  const translation = chatTranslationsVisible.has(m.id)
+    ? `<div class="cb-translation">🌐 ${chatTranslations.has(m.id) ? esc(chatTranslations.get(m.id)) : t('Переводим…','Translating…')}</div>`
+    : '';
   return `<div class="chat-bubble ${own ? 'own' : 'other'}" data-msgid="${m.id}">
     <div class="cb-text">${chatLinkify(esc(m.text))}</div>
+    ${translation}
     <div class="cb-reactions">${pills}${addBtn}</div>
-    <div class="cb-meta"><span class="cb-author">${authorName}</span> · ${fmtChatDate(m.created_at)}</div>
+    <div class="cb-meta"><span class="cb-author">${authorName}</span> · ${fmtChatDate(m.created_at)}${translateBtn}</div>
   </div>`;
 }
 
@@ -3478,6 +3489,7 @@ function wireDmMessageButtons(){
   if (!box) return;
   box.querySelectorAll('[data-dm-react-add]').forEach(b => b.addEventListener('click', e => openDmReactionPicker(e, b.dataset.dmReactAdd)));
   box.querySelectorAll('[data-dm-reactors]').forEach(b => b.addEventListener('click', e => showDmReactors(e, b.dataset.dmReactors, b.dataset.emoji)));
+  box.querySelectorAll('[data-dm-translate]').forEach(b => b.addEventListener('click', () => toggleTranslateMessage(b.dataset.dmTranslate, b.dataset.translateText)));
 }
 
 function bindDmEvents(){
@@ -3831,6 +3843,45 @@ async function sendChatMessageToTicker(id){
   if (!msg) return;
   if (!confirm(t('Отправить это сообщение в бегущую строку?','Send this message to the ticker?'))) return;
   await startTicker(msg.text, profileName(msg.author_id));
+}
+
+// ---------------- перевод сообщений прямо в чате (как в WeChat) ----------------
+// Автоопределение исходного языка (sl=auto), перевод на текущий язык интерфейса —
+// тот же бесплатный эндпоинт Google Translate без ключа, что уже используется для
+// черновых переводов названий листов (см. translateRuToEn выше). Переводы не
+// сохраняются в БД — только на экране у того, кто нажал, пока не обновит страницу.
+let chatTranslations = new Map();       // id сообщения -> переведённый текст
+let chatTranslationsVisible = new Set(); // id сообщений, у которых сейчас показан перевод
+
+async function translateAuto(text, target){
+  if (!text || !text.trim()) return '';
+  try {
+    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' + target + '&dt=t&q=' + encodeURIComponent(text);
+    const res = await fetch(url);
+    const data = await res.json();
+    return (data[0] || []).map(chunk => chunk[0]).join('');
+  } catch (e){ return ''; }
+}
+
+async function toggleTranslateMessage(id, text){
+  if (chatTranslationsVisible.has(id)){
+    chatTranslationsVisible.delete(id);
+    rerenderCurrentChatView();
+    return;
+  }
+  chatTranslationsVisible.add(id);
+  rerenderCurrentChatView(); // сразу показываем место под перевод, текст подставится чуть позже
+  if (!chatTranslations.has(id)){
+    const target = currentLang === 'en' ? 'en' : 'ru';
+    const translated = await translateAuto(text, target);
+    chatTranslations.set(id, translated || t('Не удалось перевести.','Translation failed.'));
+    rerenderCurrentChatView();
+  }
+}
+function rerenderCurrentChatView(){
+  if (activeTab !== 'chat') return;
+  if (activeChatChannel === 'group') renderChatMessages();
+  else renderDmMessages();
 }
 
 init();
