@@ -3895,7 +3895,7 @@ function renderTickerBar(){
     tickerBarEl.className = 'app-ticker';
     document.body.appendChild(tickerBarEl);
   }
-  const text = appTicker.text + (appTicker.author_name ? ' — ' + appTicker.author_name : '');
+  const text = appTicker.text;
   const duration = Math.max(14, text.length * 0.26);
   tickerBarEl.innerHTML =
     `<span class="at-track" style="animation-duration:${duration}s">${esc(text)}</span>` +
