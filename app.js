@@ -3283,7 +3283,7 @@ function renderTickerAdminPanel(){
       ${active
         ? `<span class="muted" style="font-size:11px">${t('Активна, выключится','Active, turns off')} ${fmtChatDate(appTicker.expires_at)}</span>
            <button class="btn secondary small" id="tickerStopBtn">${t('Остановить','Stop')}</button>`
-        : `<input type="text" id="tickerTextInput" maxlength="500" placeholder="${t('Текст бегущей строки...','Ticker text...')}">
+        : `<input type="text" id="tickerTextInput" maxlength="500" autocomplete="off" placeholder="${t('Текст бегущей строки...','Ticker text...')}">
            <button class="btn secondary small" id="tickerStartBtn">${t('Запустить','Start')}</button>`}
     </div>
   </div>`;
