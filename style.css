@@ -340,3 +340,6 @@ table.assignments-table textarea.asgNote:hover,table.assignments-table textarea.
   .badge{border:1px solid #000 !important;background:#fff !important;color:#000 !important;border-radius:3px !important;}
   .muted{color:#333 !important;}
 }
+
+#materialsRoot .muted{color:var(--muted);}
+#materialsRoot table td{padding:4px 8px;border-bottom:1px solid var(--border);font-size:13px;}

@@ -226,6 +226,7 @@ function buildTabs(){
   tabs.push(['assignments', 'Поручения']);
   if (isFullAccess()) tabs.push(['users', 'Пользователи']);
   if (isFullAccess()) tabs.push(['stats', 'Статистика']);
+  tabs.push(['materials', 'Материалы']);
   }
 
   const tabsEl = document.getElementById('tabs');
@@ -255,6 +256,7 @@ function renderTab(id){
   else if (id === 'assignments') c.innerHTML = renderAssignmentsTab();
   else if (id === 'users') c.innerHTML = renderUsersTab();
   else if (id === 'stats' && isFullAccess()) c.innerHTML = renderStatsTab();
+  else if (id === 'materials') c.innerHTML = renderMaterialsTab();
   bindTabEvents(id);
   if (isViewer()) applyViewerReadOnly();
 }
@@ -2635,6 +2637,229 @@ function renderStatsTab(){
   </div>`;
 }
 
+// ---------------- вкладка «Материалы» ----------------
+// Раздача программ сотрудникам из списка «Пользователи» (см. migration_040_materials.sql).
+// Файл лежит в ПРИВАТНОМ бакете Storage и скачивается по короткой подписанной ссылке — доступ
+// проверяет база (can_use_materials), а не эта страница. Ключ активации выдаёт Edge Function
+// issue-activation (supabase/functions/issue-activation): она проверяет, что человек есть в списке.
+const MATERIALS_BUCKET = 'materials';
+const MACHINE_ID_RE = /^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/;
+let materialsState = { loaded:false, loading:false, error:null, items:[], acts:[], editing:null, busy:null, issued:null, message:null };
+
+function materialsFmtDate(iso){
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function materialsCopy(text){
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } finally { ta.remove(); }
+  };
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).catch(fallback);
+  fallback();
+  return Promise.resolve();
+}
+// ответ Edge Function с кодом ≠ 2xx приходит как FunctionsHttpError — текст причины лежит в теле ответа
+async function materialsInvokeError(error){
+  try {
+    const j = await error.context.json();
+    if (j?.error) return j.error;
+  } catch (e) {}
+  if (error.context?.status === 404) return 'Сервис активации ещё не подключён (Edge Function issue-activation не развёрнута). Сообщите администратору.';
+  return error.message || 'Не удалось получить ключ';
+}
+
+async function loadMaterials(){
+  materialsState.loading = true;
+  const [m, a] = await Promise.all([
+    sb.from('materials').select('*').order('title'),
+    sb.from('app_activations').select('*').order('created_at', { ascending: false }),
+  ]);
+  const err = m.error || a.error;
+  materialsState.loading = false;
+  if (err){
+    const notMigrated = err.code === 'PGRST205' || err.code === '42P01' || /schema cache|does not exist/i.test(err.message || '');
+    materialsState.error = notMigrated
+      ? 'Раздел «Материалы» ещё не подключён к базе (не выполнена миграция 040). Сообщите администратору.'
+      : 'Не удалось загрузить: ' + err.message;
+    materialsState.items = []; materialsState.acts = [];
+  } else {
+    materialsState.error = null;
+    materialsState.items = m.data || [];
+    materialsState.acts = a.data || [];
+    materialsState.loaded = true;
+  }
+}
+
+function renderMaterialsTab(){
+  return `<div id="materialsRoot">${materialsHtml()}</div>`;
+}
+
+function materialsHtml(){
+  const st = materialsState;
+  if (st.error) return `<div class="card"><div class="card-body"><p style="margin:0;color:var(--red);">${esc(st.error)}</p></div></div>`;
+  if (!st.loaded) return `<div class="card"><div class="card-body"><p class="muted" style="margin:0;">Загрузка…</p></div></div>`;
+  if (!st.items.length){
+    return `<div class="card"><div class="card-body"><p class="muted" style="margin:0;">Материалов пока нет. Если вы ожидали их увидеть — вашего email нет в списке во вкладке «Пользователи» (доступ только для сотрудников из этого списка).</p></div></div>`;
+  }
+  const editor = isFullAccess();
+  const myEmail = (profile.email || '').trim().toLowerCase();
+  return (st.message ? `<div class="card"><div class="card-body"><p style="margin:0;">${esc(st.message)}</p></div></div>` : '')
+    + st.items.map(it => {
+    const k = esc(it.key);
+    const acts = st.acts.filter(x => x.material_key === it.key);
+    const mine = acts.filter(x => (x.user_email || '').toLowerCase() === myEmail);
+    const editing = st.editing === it.key;
+    const issued = st.issued && st.issued.material_key === it.key ? st.issued : null;
+    const busy = st.busy === it.key;
+    return `
+    <div class="card" data-material="${k}">
+      <div class="card-header"><span class="title">${esc(it.title)}</span>${it.version ? `<span class="muted" style="font-size:12px;">версия ${esc(it.version)}</span>` : ''}</div>
+      <div class="card-body">
+        ${editing
+          ? `<textarea class="mat-desc" rows="10" style="width:100%;box-sizing:border-box;">${esc(it.description)}</textarea>
+             <div style="margin-top:8px;display:flex;gap:8px;"><button class="btn small" data-act="save-desc">Сохранить описание</button><button class="btn secondary small" data-act="cancel-desc">Отмена</button></div>`
+          : `<div style="white-space:pre-wrap;line-height:1.5;">${esc(it.description) || '<span class="muted">Описание не заполнено</span>'}</div>
+             ${editor ? `<div style="margin-top:8px;"><button class="btn secondary small" data-act="edit-desc">Изменить описание</button></div>` : ''}`}
+        <div style="margin-top:16px;">
+          <button class="btn" data-act="download" ${it.file_path && !busy ? '' : 'disabled'}>⬇ Скачать приложение</button>
+          ${it.file_path ? '' : `<span class="muted" style="font-size:12px;margin-left:8px;">файл ещё не загружен${editor ? ' — загрузите ниже' : ''}</span>`}
+        </div>
+        ${editor ? `
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+          <div class="muted" style="font-size:12px;margin-bottom:6px;">Загрузить новую версию (ZIP с программой, уже со встроенной проверкой активации)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input type="text" class="mat-version" placeholder="Версия, напр. 1.4" value="${esc(it.version)}" style="width:130px;">
+            <input type="file" class="mat-file" accept=".zip">
+            <button class="btn secondary small" data-act="upload" ${busy ? 'disabled' : ''}>${busy ? 'Загружаю…' : 'Загрузить'}</button>
+          </div>
+        </div>` : ''}
+      </div>
+    </div>
+
+    <div class="card" data-material="${k}">
+      <div class="card-header"><span class="title">Активация</span></div>
+      <div class="card-body">
+        <ol style="margin:0 0 12px;padding-left:20px;line-height:1.6;">
+          <li>Скачайте программу и установите её.</li>
+          <li>При первом запуске она покажет «Код компьютера» (вид <b>XXXX-XXXX-XXXX-XXXX</b>) — скопируйте его.</li>
+          <li>Вставьте код ниже и нажмите «Получить ключ». Сайт проверит, что вы есть в списке пользователей, и выдаст ключ.</li>
+          <li>Вставьте ключ в окно активации программы. Ключ привязан к этому компьютеру и действует бессрочно.</li>
+        </ol>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="text" class="mat-machine" placeholder="Код компьютера: XXXX-XXXX-XXXX-XXXX" maxlength="19" style="width:280px;font-family:monospace;" autocomplete="off">
+          <button class="btn" data-act="issue" ${busy ? 'disabled' : ''}>Получить ключ</button>
+        </div>
+        ${issued ? `
+        <div style="margin-top:12px;">
+          <div class="muted" style="font-size:12px;margin-bottom:4px;">Ключ для компьютера ${esc(issued.machine_id)}${issued.reused ? ' (выдан ранее)' : ''}:</div>
+          <textarea class="mat-key" rows="3" readonly style="width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;">${esc(issued.activation_key)}</textarea>
+          <div style="margin-top:6px;"><button class="btn secondary small" data-act="copy-key">Копировать ключ</button></div>
+        </div>` : ''}
+        ${mine.length ? `
+        <div style="margin-top:16px;">
+          <div class="muted" style="font-size:12px;margin-bottom:4px;">Мои активации (${mine.length} из 3 возможных компьютеров)</div>
+          <table style="width:100%;"><tbody>
+            ${mine.map(x => `<tr><td style="font-family:monospace;">${esc(x.machine_id)}</td><td>${esc(materialsFmtDate(x.created_at))}</td><td style="text-align:right;"><button class="btn secondary small" data-act="show-key" data-id="${esc(x.id)}">Показать ключ</button></td></tr>`).join('')}
+          </tbody></table>
+        </div>` : ''}
+        ${editor ? `
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+          <div class="muted" style="font-size:12px;margin-bottom:4px;">Все активации (${acts.length}). Удаление освобождает сотруднику место под новый компьютер, но уже выданный ключ на старом компьютере продолжит работать.</div>
+          ${acts.length ? `<table style="width:100%;"><tbody>
+            ${acts.map(x => `<tr><td>${esc(x.user_email)}</td><td style="font-family:monospace;">${esc(x.machine_id)}</td><td>${esc(materialsFmtDate(x.created_at))}</td><td style="text-align:right;"><button class="btn secondary small" data-act="del-act" data-id="${esc(x.id)}">Удалить</button></td></tr>`).join('')}
+          </tbody></table>` : '<span class="muted">Пока никто не активировал.</span>'}
+        </div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function materialsPaint(){
+  const root = document.getElementById('materialsRoot');
+  if (!root || activeTab !== 'materials') return; // пока грузилось, пользователь ушёл на другую вкладку
+  root.innerHTML = materialsHtml();
+}
+
+function bindMaterialsEvents(){
+  const root = document.getElementById('materialsRoot');
+  if (!root) return;
+  if (!materialsState.loaded && !materialsState.loading) loadMaterials().then(materialsPaint);
+  root.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('[data-act]');
+    if (!btn || btn.disabled) return;
+    const card = btn.closest('[data-material]');
+    const key = card?.dataset.material;
+    const item = materialsState.items.find(x => x.key === key);
+    if (!item) return;
+    const act = btn.dataset.act;
+    const st = materialsState;
+    try {
+      if (act === 'edit-desc'){ st.editing = key; materialsPaint(); }
+      else if (act === 'cancel-desc'){ st.editing = null; materialsPaint(); }
+      else if (act === 'save-desc'){
+        const description = card.querySelector('.mat-desc').value;
+        await dbWrite(sb.from('materials').update({ description, updated_by: profile.id, updated_at: new Date().toISOString() }).eq('key', key));
+        item.description = description; st.editing = null; materialsPaint();
+      }
+      else if (act === 'download'){
+        const ext = (item.file_path.match(/\.[A-Za-z0-9]+$/) || ['.zip'])[0];
+        const { data, error } = await sb.storage.from(MATERIALS_BUCKET).createSignedUrl(item.file_path, 120, { download: `${item.title.replace(/[^\wА-Яа-яЁё.-]+/g, '_')}-${item.version || ''}${ext}` });
+        if (error) throw new Error(error.message);
+        const a = document.createElement('a');
+        a.href = data.signedUrl; document.body.appendChild(a); a.click(); a.remove();
+      }
+      else if (act === 'upload'){
+        const file = card.querySelector('.mat-file').files[0];
+        const version = card.querySelector('.mat-version').value.trim();
+        if (!file){ alert('Выберите файл (ZIP).'); return; }
+        if (!version){ alert('Укажите версию.'); return; }
+        st.busy = key; materialsPaint();
+        // в ключах Storage кириллица не допускается — имя файла делаем латинским
+        const path = `${key}/${key}-${version.replace(/[^\w.-]+/g, '_')}.zip`;
+        const up = await sb.storage.from(MATERIALS_BUCKET).upload(path, file, { upsert: true, contentType: 'application/zip' });
+        if (up.error) throw new Error(up.error.message);
+        await dbWrite(sb.from('materials').update({ file_path: path, version, updated_by: profile.id, updated_at: new Date().toISOString() }).eq('key', key));
+        if (item.file_path && item.file_path !== path) await sb.storage.from(MATERIALS_BUCKET).remove([item.file_path]);
+        item.file_path = path; item.version = version; st.message = 'Файл загружен.';
+      }
+      else if (act === 'issue'){
+        const machineId = card.querySelector('.mat-machine').value.trim().toUpperCase();
+        if (!MACHINE_ID_RE.test(machineId)){ alert('Код компьютера должен выглядеть как XXXX-XXXX-XXXX-XXXX (цифры 0–9 и буквы A–F). Скопируйте его из программы.'); return; }
+        st.busy = key; materialsPaint();
+        const { data, error } = await sb.functions.invoke('issue-activation', { body: { material_key: key, machine_id: machineId } });
+        if (error) throw new Error(await materialsInvokeError(error));
+        st.issued = { ...data, material_key: key };
+        await loadMaterials();
+      }
+      else if (act === 'copy-key'){
+        await materialsCopy(st.issued.activation_key);
+        btn.textContent = 'Скопировано ✓';
+      }
+      else if (act === 'show-key'){
+        const row = st.acts.find(x => x.id === btn.dataset.id);
+        if (row) st.issued = { material_key: key, machine_id: row.machine_id, activation_key: row.activation_key, reused: false };
+        materialsPaint();
+      }
+      else if (act === 'del-act'){
+        const row = st.acts.find(x => x.id === btn.dataset.id);
+        if (!row || !confirm(`Удалить активацию ${row.user_email} (компьютер ${row.machine_id})?\nСотрудник сможет активировать новый компьютер; ключ на этом компьютере продолжит работать.`)) return;
+        await dbWrite(sb.from('app_activations').delete().eq('id', row.id));
+        st.acts = st.acts.filter(x => x.id !== row.id);
+        materialsPaint();
+      }
+    } catch (e) {
+      if (st.busy === key) st.busy = null;
+      alert('Ошибка: ' + (e.message || e));
+    } finally {
+      if (st.busy === key){ st.busy = null; }
+      if (act === 'upload' || act === 'issue') materialsPaint();
+    }
+  });
+}
+
 // ---------------- события форм ----------------
 function bindTabEvents(id){
   if (id === 'project'){
@@ -3147,6 +3372,7 @@ function bindTabEvents(id){
       renderTab('stats');
     });
   }
+  else if (id === 'materials') bindMaterialsEvents();
   else if (id === 'chat') bindChatEvents();
 }
 
