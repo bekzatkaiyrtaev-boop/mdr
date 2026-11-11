@@ -5,3 +5,6 @@
 activation-private.pem
 client_secret.json
 gdrive_tokens.txt
+
+# служебные файлы Supabase CLI
+supabase/.temp/

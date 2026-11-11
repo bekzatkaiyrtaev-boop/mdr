@@ -1252,7 +1252,7 @@ function renderSheetCompDetail(){
         <colgroup>
           <col style="width:240px;"><col style="width:90px;"><col style="width:80px;"><col style="width:160px;"><col style="width:320px;"><col style="width:290px;"><col style="width:170px;"><col style="width:110px;"><col style="width:44px;">
         </colgroup>
-        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th id="scHeaderComment" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Примечания</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col" id="scHeaderCustomerDesignation" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
+        <tr><th>Наименование листа</th><th id="scHeaderFormat" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Формат</th><th id="scHeaderRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия</th><th>Обозначение</th><th id="scHeaderComment" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Примечания</th><th id="scHeaderStatus" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Статус</th><th class="cust-col" id="scHeaderCustomerDesignation" style="cursor:pointer;" title="Клик — заполнить весь столбец по образцу первой строки: последние цифры после тире = номер листа из наименования (01, 02, … 10, 11)">Обозначение Hebei</th><th class="cust-col" id="scHeaderCustomerRevision" style="cursor:pointer;" title="Клик — заполнить весь столбец значением из первой строки">Ревизия Hebei</th><th></th></tr>
         ${rows.length ? rows.map(s => `
           <tr data-id="${s.id}" ${s.is_attachment ? 'class="att-row"' : ''}>
             <td>
@@ -1326,6 +1326,50 @@ function bindFillDownHeader(headerId, cellSelector, dbColumn, getValue){
     await dbWrite(sb.from('sheets').update({ [dbColumn]: value, updated_at }).in('id', ids));
     const idSet = new Set(ids);
     sheets.forEach(s => { if (idSet.has(s.id)){ s[dbColumn] = value; s.updated_at = updated_at; } });
+    document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
+    bindSheetCompDetailEvents();
+  });
+}
+// «Обозначение Hebei»: клик по заголовку берёт образец из первой строки (напр. F13821S-T0201-01) и ставит во все строки
+// то же обозначение, заменяя последние цифры после тире номером листа из наименования («5. План…» → …-05, «12. …» → …-12)
+function designationForSheet(sample, name){
+  const base = /^(.*-)\d+$/.exec((sample || '').trim());
+  const num = /^\s*(\d+)\s*\./.exec(name || '');
+  if (!base || !num) return null;
+  return base[1] + String(parseInt(num[1], 10)).padStart(2, '0');
+}
+function bindCustomerDesignationHeader(){
+  const header = document.getElementById('scHeaderCustomerDesignation');
+  if (!header) return;
+  header.addEventListener('click', async () => {
+    const cells = [...document.querySelectorAll('#sheetCompDetail .sCustomerDesignation')];
+    if (!cells.length || cells[0].disabled) return;
+    const sample = cells[0].value.trim();
+    if (!/-\d+$/.test(sample)){
+      alert('Заполните обозначение в первой строке — оно должно оканчиваться тире и цифрами, например F13821S-T0201-01. Остальные строки заполнятся по этому образцу.');
+      return;
+    }
+    const updates = [];
+    cells.forEach(el => {
+      const nameEl = document.querySelector('#sheetCompDetail .sName[data-id="' + el.dataset.id + '"]');
+      const sheet = sheets.find(x => x.id === el.dataset.id);
+      const value = designationForSheet(sample, nameEl ? nameEl.value : sheet && sheet.name_ru);
+      if (value) updates.push({ id: el.dataset.id, value });
+    });
+    if (!updates.length){ alert('Ни у одного листа в наименовании нет номера до точки (например «1. Общие данные»).'); return; }
+    const skipped = cells.length - updates.length;
+    if (!confirm('Заполнить обозначение у ' + updates.length + ' лист(ов) по образцу первой строки: ' + updates[0].value + ' … ' + updates[updates.length - 1].value
+        + '?\nПоследние цифры — номер листа из наименования (до точки), до 10 с нулём спереди.'
+        + (skipped ? '\nБез номера в наименовании, будут пропущены: ' + skipped + '.' : ''))) return;
+    const updated_at = new Date().toISOString();
+    const results = await Promise.all(updates.map(u => sb.from('sheets').update({ customer_designation: u.value, updated_at }).eq('id', u.id)));
+    results.forEach((r, i) => {
+      if (r.error) return;
+      const sheet = sheets.find(x => x.id === updates[i].id);
+      if (sheet){ sheet.customer_designation = updates[i].value; sheet.updated_at = updated_at; }
+    });
+    const failed = results.find(r => r.error);
+    if (failed) alert('Ошибка базы данных: ' + failed.error.message + '\nЧасть строк могла не сохраниться — проверьте столбец.');
     document.getElementById('sheetCompDetail').innerHTML = renderSheetCompDetail();
     bindSheetCompDetailEvents();
   });
@@ -1570,7 +1614,7 @@ function bindSheetCompDetailEvents(){
   bindFillDownHeader('scHeaderFormat', '.sFormat', 'format', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderComment', '.sComment', 'comment', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderRevision', '.sRevision', 'revision', el => el.value.trim() || null);
-  bindFillDownHeader('scHeaderCustomerDesignation', '.sCustomerDesignation', 'customer_designation', el => el.value.trim() || null);
+  bindCustomerDesignationHeader();
   bindFillDownHeader('scHeaderCustomerRevision', '.sCustomerRevision', 'customer_revision', el => el.value.trim() || null);
   bindFillDownHeader('scHeaderStatus', '.sStatus', 'status', el => el.value);
 
